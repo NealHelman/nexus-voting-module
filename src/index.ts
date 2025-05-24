@@ -1,3 +1,4 @@
+// --- Root entry: index.ts ---
 import { VotingPage } from './pages/VotingPage';
 import { IssuePage } from './pages/IssuePage';
 import { AdminPage } from './pages/AdminPage';
