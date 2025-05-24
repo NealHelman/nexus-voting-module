@@ -132,11 +132,7 @@ const AdminPage = () => {
 
     try {
       editing ? await nexusVotingService.updateVoteViaBackend({ ...issue, id: editingId }) : await nexusVotingService.createVoteViaBackend(issue);
-      setMessage(`Vote creation request sent to Voting Authority.
-
-Options:
-${optionLabels.map((label, idx) => `  ${label}`).join('
-')}`);
+      setMessage(`Vote creation request sent to Voting Authority.\n\nOptions:\n${optionLabels.map((label) => `  ${label}`).join('\n')}`);
     } catch (e) {
       setMessage(`Error: ${e.message}`);
     }
