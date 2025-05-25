@@ -1,59 +1,16 @@
 // --- Pages: AdminPage.jsx ---
 import React, { useState, useEffect } from 'react';
-import { compressToUTF16, decompressFromUTF16 } from 'lz-string';
+import { compressToUTF16 } from 'lz-string';
 import nexusVotingService from '../services/nexusVotingService';
 import { MIN_TRUST_WEIGHT } from '../constants';
-
-export import { useLocation } from 'react-router-dom';
+import { useLocation } from 'react-router-dom';
+import axios from 'axios';
 
 const AdminPage = () => {
-  useEffect(() => {
-    const computeByteCount = () => {
-      const fakeDocs = files.map(file => ({ name: file.name, cid: 'placeholder' }));
-      const payload = {
-        title,
-        description,
-        option_labels: optionLabels,
-        min_trust: parseInt(minTrust),
-        vote_finality: voteFinality,
-        organizer_name: organizerName,
-        organizer_telegram: organizerTelegram,
-        deadline: parseInt(deadline),
-        analysis_link: analysisLink,
-        summary_pro: compressToUTF16(summaryPro),
-        summary_con: compressToUTF16(summaryCon),
-        possible_outcomes: compressToUTF16(possibleOutcomes),
-        created_by: window?.USER?.genesis || 'unknown',
-        created_at: Math.floor(Date.now() / 1000),
-        supporting_docs: fakeDocs,
-      };
-      const payloadSize = new Blob([JSON.stringify(payload)]).size;
-      setByteCount(payloadSize);
-      setFieldSizes({
-        summary_pro: new Blob([compressToUTF16(summaryPro)]).size,
-        summary_con: new Blob([compressToUTF16(summaryCon)]).size,
-        possible_outcomes: new Blob([compressToUTF16(possibleOutcomes)]).size,
-        title: new Blob([title]).size,
-        description: new Blob([description]).size,
-        option_labels: new Blob([JSON.stringify(optionLabels)]).size,
-        metadata: new Blob([JSON.stringify({
-          min_trust: parseInt(minTrust),
-          vote_finality,
-          organizer_name,
-          organizer_telegram,
-          deadline,
-          analysis_link,
-          created_by: window?.USER?.genesis || 'unknown',
-          created_at: Math.floor(Date.now() / 1000),
-          supporting_docs: fakeDocs
-        })]).size
-      });
-    };
-    computeByteCount();
-  }, [title, description, optionLabels, minTrust, voteFinality, organizerName, organizerTelegram, deadline, analysisLink, summaryPro, summaryCon, possibleOutcomes]);
   const location = useLocation();
   const params = new URLSearchParams(location.search);
   const editId = params.get('edit');
+
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [optionLabels, setOptionLabels] = useState(['', '']);
@@ -67,6 +24,12 @@ const AdminPage = () => {
   const [summaryCon, setSummaryCon] = useState('');
   const [possibleOutcomes, setPossibleOutcomes] = useState('');
   const [message, setMessage] = useState('');
+  const [byteCount, setByteCount] = useState(0);
+  const [fieldSizes, setFieldSizes] = useState({});
+  const [files, setFiles] = useState([]);
+  const [uploading, setUploading] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [editingId, setEditingId] = useState(null);
 
   useEffect(() => {
     const prefill = async () => {
@@ -74,25 +37,19 @@ const AdminPage = () => {
       try {
         const res = await window.API.get(`/register/read/${editId}`);
         const data = typeof res.data === 'string' ? JSON.parse(res.data) : res.data;
-        setTitle(data.title || '');
-        setDescription(data.description || '');
-        setOptionLabels(data.option_labels || ['', '']);
-        setMinTrust(data.min_trust || MIN_TRUST_WEIGHT);
-        setVoteFinality(data.vote_finality || 'one_time');
-        setOrganizerName(data.organizer_name || '');
-        setOrganizerTelegram(data.organizer_telegram || '');
-        setDeadline(data.deadline || '');
-        setAnalysisLink(data.analysis_link || '');
-        setSummaryPro(decompressFromUTF16(data.summary_pro || '') || '');
-        setSummaryCon(decompressFromUTF16(data.summary_con || '') || '');
-        try {
-          setPossibleOutcomes((decompressFromUTF16(data.possible_outcomes || '') || '').split('
-').map(s => s.trim()).filter(Boolean).join('
-'));
-        } catch (e) {
-          console.warn('Failed to decompress possible_outcomes:', e);
-          setPossibleOutcomes('');
-        }
+        const config = JSON.parse(require('lz-string').decompressFromUTF16(data.config));
+        setTitle(config.title || '');
+        setDescription(config.description || '');
+        setOptionLabels(config.option_labels || ['', '']);
+        setMinTrust(config.min_trust || MIN_TRUST_WEIGHT);
+        setVoteFinality(config.vote_finality || 'one_time');
+        setOrganizerName(config.organizer_name || '');
+        setOrganizerTelegram(config.organizer_telegram || '');
+        setDeadline(config.deadline || '');
+        setAnalysisLink(config.analysis_link || '');
+        setSummaryPro(config.summary_pro || '');
+        setSummaryCon(config.summary_con || '');
+        setPossibleOutcomes(config.possible_outcomes || '');
         setEditing(true);
         setEditingId(editId);
       } catch (e) {
@@ -102,123 +59,77 @@ const AdminPage = () => {
     prefill();
   }, [editId]);
 
-  const createVote = async () => {
-    const payload = {
-      title,
-      description,
-      option_labels: optionLabels,
-      min_trust: parseInt(minTrust),
-      vote_finality: voteFinality,
-      organizer_name: organizerName,
-      organizer_telegram: organizerTelegram,
-      deadline: parseInt(deadline),
-      analysis_link: analysisLink,
-      summary_pro: compressToUTF16(summaryPro),
-      summary_con: compressToUTF16(summaryCon),
-      possible_outcomes: compressToUTF16(possibleOutcomes),
-      description,
-      option_labels: optionLabels,
-      min_trust: parseInt(minTrust),
-      vote_finality: voteFinality,
-      organizer_name: organizerName,
-      organizer_telegram: organizerTelegram,
-      deadline: parseInt(deadline),
-      analysis_link: analysisLink,
-      summary_pro: summaryPro,
-      summary_con: summaryCon,
-      possible_outcomes: possibleOutcomes.split('
-').map(s => s.trim()).filter(Boolean),
-      created_by: window?.USER?.genesis || 'unknown',
-      created_at: Math.floor(Date.now() / 1000),
-      supporting_docs: [],
+  useEffect(() => {
+    const computeByteCount = () => {
+      const config = {
+        title,
+        description,
+        option_labels: optionLabels,
+        min_trust: parseInt(minTrust),
+        vote_finality: voteFinality,
+        organizer_name: organizerName,
+        organizer_telegram: organizerTelegram,
+        deadline: parseInt(deadline),
+        analysis_link: analysisLink,
+        summary_pro: summaryPro,
+        summary_con: summaryCon,
+        possible_outcomes: possibleOutcomes,
+        created_by: window?.USER?.genesis || 'unknown',
+        created_at: Math.floor(Date.now() / 1000),
+        supporting_docs: files.map(file => ({ name: file.name, cid: file.cid || 'placeholder' }))
+      };
+      const compressed = compressToUTF16(JSON.stringify(config));
+      const wrapped = JSON.stringify([{
+        name: "config",
+        type: "string",
+        value: compressed,
+        mutable: true
+      }]);
+      const size = new Blob([wrapped]).size;
+      setByteCount(size);
+      setFieldSizes({
+        wrapped_payload: size,
+        compressed_config: new Blob([compressed]).size
+      });
     };
-    const payloadSize = new Blob([JSON.stringify(payload)]).size;
-    setByteCount(payloadSize);
-    if (payloadSize > 1024) {
-      setMessage(`Data exceeds the 1KB asset storage limit (actual: ${payloadSize} bytes). Please shorten your input.`);
-      return;
-    }
-    const payloadSize = new Blob([JSON.stringify({
-      title,
-      description,
-      option_labels: optionLabels,
-      min_trust: parseInt(minTrust),
-      vote_finality: voteFinality,
-      organizer_name: organizerName,
-      organizer_telegram: organizerTelegram,
-      deadline: parseInt(deadline),
-      analysis_link: analysisLink,
-      summary_pro: summaryPro,
-      summary_con: summaryCon,
-      possible_outcomes: possibleOutcomes.split('
-').map(s => s.trim()).filter(Boolean),
-      created_by: window?.USER?.genesis || 'unknown',
-      created_at: Math.floor(Date.now() / 1000),
-      supporting_docs: [],
-    })]).size;
-    if (payloadSize > 1024) {
-      setMessage(`Data exceeds the 1KB asset storage limit (actual: ${payloadSize} bytes). Please shorten your input.`);
-      return;
-    }
-    const pin = await window.getPIN('This will send ' + (1 + optionLabels.length) + ' NXS to NexusCommunityVoting:default.');
-    if (!pin) {
-      setMessage('Vote creation cancelled.');
-      return;
-    }
-    // PIN already retrieved via getPIN above
-    if (uploading) return;
+    computeByteCount();
+  }, [title, description, optionLabels, minTrust, voteFinality, organizerName, organizerTelegram, deadline, analysisLink, summaryPro, summaryCon, possibleOutcomes, files]);
+
+  const handleFileChange = async (e) => {
+    const selectedFiles = Array.from(e.target.files);
+    const allowedTypes = ['text/markdown', 'text/plain', 'application/pdf'];
+    const filtered = selectedFiles.filter(f => allowedTypes.includes(f.type));
+    if (filtered.length === 0) return;
+
     setUploading(true);
-    let supporting_docs = [];
-    if (files.length > 0) {
-      for (const file of files) {
+    try {
+      const updatedFiles = await Promise.all(filtered.map(async (file) => {
         const formData = new FormData();
         formData.append('file', file);
-        try {
-          const res = await fetch('https://ipfs.infura.io:5001/api/v0/add', {
-            method: 'POST',
-            body: formData,
-          });
-          const text = await res.text();
-          const cidMatch = text.match(/"Hash":"([^"]+)"/);
-          if (cidMatch) supporting_docs.push({ name: file.name, cid: cidMatch[1] });
-        } catch (e) {
-          console.error('Failed to upload', file.name, e);
-        }
-      }
+        const res = await axios.post('https://ipfs.infura.io:5001/api/v0/add', formData);
+        return { name: file.name, cid: res.data.Hash };
+      }));
+      setFiles(prev => [...prev, ...updatedFiles]);
+    } catch (e) {
+      setMessage('Failed to upload file to IPFS.');
+    } finally {
+      setUploading(false);
     }
+  };
+
+  const createVote = async () => {
     if (!title.trim() || !description.trim() || optionLabels.length < 2 || optionLabels.some(l => !l.trim())) {
       setMessage('Please fill in the title, description, and at least two valid option labels.');
       return;
     }
 
-    const createTx = async (amount, to, pin) => {
-      return await window.API.post('/finance/debit/account', {
-        pin,
-        amount,
-        to
-      });
-    };
-
-    try {
-      await createTx(2 + optionLabels.length, 'NexusCommunityVoting:default', pin);
-    } catch (e) {
-      setMessage(`Error sending NXS to Voting Authority: ${e.message}`);
+    const pin = await window.getPIN('This will send ' + (2 + optionLabels.length) + ' NXS to NexusCommunityVoting:default.');
+    if (!pin) {
+      setMessage('Vote creation cancelled.');
       return;
     }
 
-    const optionAccounts = optionLabels.map(() => ''); // placeholder
-      } catch (e) {
-        setMessage(`Error creating option ${i}: ${e.message}`);
-        return;
-      }
-    }
-      } catch (e) {
-        setMessage(`Error creating option ${i}: ${e.message}`);
-        return;
-      }
-    }
-
-    const issue = {
+    const config = {
       title,
       description,
       option_labels: optionLabels,
@@ -230,17 +141,48 @@ const AdminPage = () => {
       analysis_link: analysisLink,
       summary_pro: summaryPro,
       summary_con: summaryCon,
-      possible_outcomes: possibleOutcomes.split('
-').map(s => s.trim()).filter(Boolean),
+      possible_outcomes: possibleOutcomes,
       created_by: window?.USER?.genesis || 'unknown',
       created_at: Math.floor(Date.now() / 1000),
-      option_accounts: optionAccounts,
-            supporting_docs,
+      supporting_docs: files
     };
 
+    const compressed = compressToUTF16(JSON.stringify(config));
+    const wrapped = JSON.stringify([{
+      name: "config",
+      type: "string",
+      value: compressed,
+      mutable: true
+    }]);
+
+    const payloadSize = new Blob([wrapped]).size;
+    setByteCount(payloadSize);
+    if (payloadSize > 1024) {
+      setMessage(`Data exceeds the 1KB asset storage limit (actual: ${payloadSize} bytes). Please shorten your input.`);
+      return;
+    }
+
     try {
-      editing ? await nexusVotingService.updateVoteViaBackend({ ...issue, id: editingId }) : await nexusVotingService.createVoteViaBackend(issue);
-      setMessage(`Vote creation request sent to Voting Authority.\n\nOptions:\n${optionLabels.map((label) => `  ${label}`).join('\n')}`);
+      await window.API.post('/finance/debit/account', {
+        pin,
+        amount: 2 + optionLabels.length,
+        to: 'NexusCommunityVoting:default'
+      });
+
+      const optionAccounts = optionLabels.map(() => '');
+      const issue = {
+        ...config,
+        option_accounts: optionAccounts
+      };
+
+      editing
+        ? await nexusVotingService.updateVoteViaBackend({ ...issue, id: editingId })
+        : await nexusVotingService.createVoteViaBackend(issue);
+
+      setMessage(`Vote creation request sent to Voting Authority.\nOptions:\n${optionLabels.map((label) => `  ${label}`).join('\\n')}`);
+    } catch (e) {
+      setMessage(`Error: ${e.message}`);
+    }
   };
 
   return (
@@ -307,3 +249,5 @@ const AdminPage = () => {
     </div>
   );
 };
+
+export default AdminPage;

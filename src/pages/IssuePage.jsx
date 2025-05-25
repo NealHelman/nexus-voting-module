@@ -1,181 +1,195 @@
 // --- Pages: IssuePage.jsx ---
 import React, { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { useDispatch, useSelector } from 'react-redux';
-import { fetchVoteById } from '../features/voteSlice';
-import nexusVotingService from '../services/nexusVotingService';
-import ReactMarkdown from 'react-markdown';
-import rehypeHighlight from 'rehype-highlight';
-import remarkGfm from 'remark-gfm';
-import remarkBreaks from 'remark-breaks';
-import rehypeRaw from 'rehype-raw';
-
 import { decompressFromUTF16 } from 'lz-string';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+import { Document, Page, pdfjs } from 'react-pdf';
 
-export const IssuePage = () => {
-  const { issueId } = useParams();
-  const dispatch = useDispatch();
-  const voteRaw = useSelector((state) => state.voting.voteDetails[issueId]);
-  const vote = voteRaw ? {
-    ...voteRaw,
-    summary_pro: decompressFromUTF16(voteRaw.summary_pro || '') || '',
-    summary_con: decompressFromUTF16(voteRaw.summary_con || '') || '',
-    possible_outcomes: (decompressFromUTF16(voteRaw.possible_outcomes || '') || '').split('
-').map(s => s.trim()).filter(Boolean),
-  } : null;
-  const [userVote, setUserVote] = useState(null);
+pdfjs.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjs.version}/pdf.worker.js`;
+
+const IssuePage = () => {
+  const { id } = useParams();
+  const [issue, setIssue] = useState(null);
+  const [error, setError] = useState(null);
+  const [docsContent, setDocsContent] = useState({});
   const [message, setMessage] = useState('');
-  const [byteCount, setByteCount] = useState(0);
-  const [fieldSizes, setFieldSizes] = useState({});
-  const [byteCount, setByteCount] = useState(0);
-  const [files, setFiles] = useState([]);
-  const [uploading, setUploading] = useState(false);
-  const [editing, setEditing] = useState(false);
-  const [editingId, setEditingId] = useState(null);
+  const [userVote, setUserVote] = useState(null);
   const [loading, setLoading] = useState(false);
-  const [docContents, setDocContents] = useState({});
+  const [voteCounts, setVoteCounts] = useState({});
 
   useEffect(() => {
-    if (issueId) dispatch(fetchVoteById(issueId));
-    const checkUserVote = async () => {
+    const fetchIssue = async () => {
       try {
-        const userGenesis = window?.USER?.genesis;
-        if (!vote || !userGenesis) return;
-        for (const acct of vote.optionAccounts || []) {
-          const txs = await window.API.get('/ledger/list/transactions', {
-            params: {
-              limit: 1,
-              WHERE: `results.contracts.address=${acct} AND results.contracts.OP=CREDIT AND results.genesis=${userGenesis}`,
-            },
-          });
-          if (txs.length > 0) {
-            setUserVote(acct);
-            break;
-          }
-        }
-      } catch (e) {
-        console.error('Error checking user vote:', e);
+        const res = await window.API.get(`/register/read/${id}`);
+        const data = typeof res.data === 'string' ? JSON.parse(res.data) : res.data;
+        const config = JSON.parse(decompressFromUTF16(data.config));
+        setIssue({ ...data, ...config });
+      } catch (err) {
+        console.error('Failed to load issue:', err);
+        setError('Failed to load issue');
       }
     };
-    checkUserVote();
-  }, [dispatch, issueId, vote]);
+    fetchIssue();
+  }, [id]);
+
+  useEffect(() => {
+    const loadDocs = async () => {
+      if (!issue?.supporting_docs) return;
+      const newDocsContent = {};
+      for (const doc of issue.supporting_docs) {
+        try {
+          const res = await fetch(`https://ipfs.io/ipfs/${doc.cid}`);
+          const contentType = res.headers.get('Content-Type');
+          const text = await res.text();
+          newDocsContent[doc.cid] = { content: text, type: contentType };
+        } catch (e) {
+          newDocsContent[doc.cid] = { content: 'Failed to load document.', type: 'text/plain' };
+        }
+      }
+      setDocsContent(newDocsContent);
+    };
+    loadDocs();
+  }, [issue]);
+
+  useEffect(() => {
+    const checkDuplicateVote = async () => {
+      if (!issue?.option_accounts?.length || !window.USER?.genesis) return;
+      try {
+        const accountChecks = issue.option_accounts.map(addr => `results.contracts.to=${addr}`).join(' OR ');
+        const whereClause = `results.contracts.OP=CREDIT AND results.genesis=${window.USER.genesis} AND (${accountChecks})`;
+        const where = encodeURIComponent(whereClause).replace(/^where=/i, 'WHERE=');
+        const res = await window.API.get(`/ledger/list/transactions?limit=100&WHERE=${where}`);
+        const credits = Array.isArray(res) ? res : res?.results || [];
+        for (const tx of credits) {
+          for (const contract of tx.contracts || []) {
+            if (issue.option_accounts.includes(contract.to)) {
+              setUserVote(contract.to);
+              return;
+            }
+          }
+        }
+      } catch (err) {
+        console.warn('Failed to check for existing vote:', err);
+      }
+    };
+    checkDuplicateVote();
+  }, [issue]);
+
+  useEffect(() => {
+    const fetchLiveTally = async () => {
+      if (!issue?.address) return;
+      try {
+        const res = await fetch(`http://65.20.79.65:4006/tally-votes/${issue.address}`);
+        const data = await res.json();
+        setVoteCounts(data);
+      } catch (e) {
+        console.warn('Failed to fetch vote tally:', e);
+      }
+    };
+    fetchLiveTally();
+  }, [issue]);
 
   const handleVote = async (account) => {
+    const pin = await window.getPIN(`You are about to vote for this option.\nThis will send 0.000001 NXS to:\n${account}`);
+    if (!pin) return;
     try {
       setLoading(true);
-      const confirm = window.confirm('This will send 0.000001 NXS to cast your vote. Do you want to proceed?');
-      if (!confirm) return;
-      await nexusVotingService.castVote(account);
+      await window.API.post('/finance/debit/account', {
+        pin,
+        amount: 0.000001,
+        to: account
+      });
+      setMessage('✅ Vote submitted successfully.');
       setUserVote(account);
-      setMessage('Vote submitted successfully.');
     } catch (e) {
-    console.error('Vote creation error:', e);
-    setMessage(`Error: ${e.message}`);
+      setMessage(`❌ Error submitting vote: ${e.message}`);
     } finally {
-    setUploading(false);
-  }
+      setLoading(false);
+    }
   };
 
-  useEffect(() => {
-    const fetchSupportingDocs = async () => {
-      if (!vote?.supporting_docs) return;
-      const contents = {};
-      for (const doc of vote.supporting_docs) {
-        if (doc.name.endsWith('.md') || doc.name.endsWith('.txt')) {
-          try {
-            const res = await fetch(`https://ipfs.io/ipfs/${doc.cid}`);
-            contents[doc.cid] = await res.text();
-          } catch (e) {
-            contents[doc.cid] = 'Failed to load content';
-          }
-        }
-      }
-      setDocContents(contents);
-    };
-    fetchSupportingDocs();
-  }, [vote]);
-
-  if (!vote) return <p>Loading vote details...</p>;
+  if (error) return <p>{error}</p>;
+  if (!issue) return <p>Loading...</p>;
 
   return (
     <div>
-      <h2>{vote.title}</h2>
-      <p><strong>Organizer:</strong> {vote.organizer}</p>
-      <p><strong>Deadline:</strong> {vote.deadline ? new Date(vote.deadline * 1000).toLocaleString() : 'None'}</p>
-      {vote.summary_pro && <><p><strong>Summary (Pro):</strong></p><div className="nxs-box"><ReactMarkdown>{vote.summary_pro}</ReactMarkdown></div></>}
-      {vote.summary_con && <><p><strong>Summary (Con):</strong></p><div className="nxs-box"><ReactMarkdown>{vote.summary_con}</ReactMarkdown></div></>}
-      {vote.possible_outcomes?.length > 0 && (
+      <h2>{issue.title}</h2>
+
+      {issue.description && <><p><strong>Description:</strong></p><div className="nxs-box"><ReactMarkdown>{issue.description}</ReactMarkdown></div></>}
+
+      <p><strong>Organizer:</strong> {issue.organizer_name}</p>
+      <p><strong>Telegram:</strong> {issue.organizer_telegram}</p>
+      <p><strong>Deadline:</strong> {new Date(issue.deadline * 1000).toLocaleString()}</p>
+
+      {issue.summary_pro && <><p><strong>Summary (Pro):</strong></p><div className="nxs-box"><ReactMarkdown>{issue.summary_pro}</ReactMarkdown></div></>}
+      {issue.summary_con && <><p><strong>Summary (Con):</strong></p><div className="nxs-box"><ReactMarkdown>{issue.summary_con}</ReactMarkdown></div></>}
+      {issue.possible_outcomes?.length > 0 && (
         <div>
           <p><strong>Possible Outcomes:</strong></p>
-          <ul>{vote.possible_outcomes.map((outcome, i) => <li key={i}>{outcome}</li>)}</ul>
+          <ul>{issue.possible_outcomes.map((outcome, i) => <li key={i}>{outcome}</li>)}</ul>
         </div>
       )}
-      {vote.description && <><p><strong>Description:</strong></p><div className="nxs-box"><ReactMarkdown>{vote.description}</ReactMarkdown></div></>}
-      {vote.analysis_link && vote.analysis_link.startsWith('cid://') && (
-        <p><strong>Analysis:</strong></p>
-        <iframe
-          className="nxs-box"
-          style={{ width: '100%', height: '500px', border: '1px solid #ccc' }}
-          src={`https://ipfs.io/ipfs/${vote.analysis_link.replace('cid://', '')}`}
-          title="IPFS Analysis"
-        />
-      )}
-      <p><strong>Live Results:</strong></p>
-      <ul>
-        {vote.optionAccounts?.map((opt, idx) => {
-          const label = vote.option_labels?.[idx] || `Option ${idx + 1}`;
-          return (
-            <li key={opt}>
-              {label}: {opt}
-              <button
-                onClick={() => handleVote(opt)}
-                disabled={vote.vote_finality === 'one_time' && userVote !== null || loading}
-              >
-                Vote
-              </button>
-              {userVote === opt && <span> ✅ Your Vote</span>}<br />
-              <small>Votes: {vote.voteCounts?.[opt] ?? '...'}</small>
-            </li>
-          );
-        })}
-      </ul>
-      {vote.supporting_docs?.length > 0 && (
+
+      <p><strong>Vote Finality:</strong> {issue.vote_finality}</p>
+      <p><strong>Trust Required:</strong> {issue.min_trust}</p>
+
+      {issue.option_accounts?.length > 0 && (
         <div>
-          <p><strong>Supporting Documents:</strong></p>
+          <h3>Live Results:</h3>
           <ul>
-            {vote.supporting_docs.map((doc, i) => (
-              <li key={i}>
-                {doc.name.endsWith('.pdf') ? (
-                  <iframe
-                    src={`https://ipfs.io/ipfs/${doc.cid}`}
-                    style={{ width: '100%', height: '600px', border: '1px solid #ccc' }}
-                    title={doc.name}
-                  />
-                ) : doc.name.endsWith('.md') || doc.name.endsWith('.txt') ? (
-                <ReactMarkdown
-  remarkPlugins={[remarkGfm, remarkBreaks]}
-  rehypePlugins={[rehypeRaw, rehypeHighlight]}
-  components={{
-    img: ({ node, ...props }) => <img loading="lazy" {...props} />
-  }}
-  children={docContents[doc.cid] || 'Loading...'}
-/>
-                ) : (
-                  <iframe
-                    src={`https://ipfs.io/ipfs/${doc.cid}`}
-                    style={{ width: '100%', height: '400px', border: '1px solid #ccc' }}
-                    title={doc.name}
-                  />
-                ) : (
-                  <a href={`https://ipfs.io/ipfs/${doc.cid}`} target="_blank" rel="noopener noreferrer">{doc.name}</a>
-                )}
-              </li>
-            ))}
-              <li key={i}><a href={`https://ipfs.io/ipfs/${doc.cid}`} target="_blank" rel="noopener noreferrer">{doc.name}</a></li>
-            ))}
+            {issue.option_accounts.map((opt, idx) => {
+              const label = issue.option_labels?.[idx] || `Option ${idx + 1}`;
+              return (
+                <li key={opt}>
+                  {label}: {opt}
+                  <button
+                    onClick={() => handleVote(opt)}
+                    disabled={issue.vote_finality === 'one_time' && userVote !== null || loading}
+                    style={{ marginLeft: '1em' }}
+                  >
+                    Vote
+                  </button>
+                  {userVote === opt && <span> ✅ Your Vote</span>}<br />
+                  <small>Votes: {voteCounts?.[opt] ?? '...'}</small>
+                </li>
+              );
+            })}
           </ul>
         </div>
       )}
-      $1
+
+      {message && <p>{message}</p>}
+
+      {issue.supporting_docs?.length > 0 && (
+        <div>
+          <h3>Supporting Documents:</h3>
+          {issue.supporting_docs.map(doc => {
+            const docData = docsContent[doc.cid];
+            return (
+              <div key={doc.cid} style={{ marginBottom: '2em' }}>
+                <h4>{doc.name}</h4>
+                <a href={`https://ipfs.io/ipfs/${doc.cid}`} download target="_blank" rel="noopener noreferrer">Download</a>
+                {docData ? (
+                  docData.type.includes('pdf') ? (
+                    <Document file={`https://ipfs.io/ipfs/${doc.cid}`}>
+                      <Page pageNumber={1} />
+                    </Document>
+                  ) : docData.type.includes('markdown') || doc.name.endsWith('.md') ? (
+                    <ReactMarkdown children={docData.content} remarkPlugins={[remarkGfm]} />
+                  ) : (
+                    <pre>{docData.content}</pre>
+                  )
+                ) : (
+                  <p>Loading...</p>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
   );
 };
+
+export default IssuePage;

@@ -4,13 +4,23 @@ import { useDispatch, useSelector } from 'react-redux';
 import { fetchVotes } from '../features/voteSlice';
 import { Link } from 'react-router-dom';
 import { MIN_TRUST_WEIGHT } from '../constants';
+import { decompressFromUTF16 } from 'lz-string';
 
 export const VotingPage = () => {
   const dispatch = useDispatch();
-  const { votes, loading } = useSelector((state) => state.voting);
+  const { votes: rawVotes, loading } = useSelector((state) => state.voting);
   const [canAccessAdmin, setCanAccessAdmin] = useState(false);
   const [subscribed, setSubscribed] = useState(false);
   const [userTrust, setUserTrust] = useState(0);
+
+  const votes = rawVotes.map(vote => {
+    try {
+      const decompressed = JSON.parse(decompressFromUTF16(vote.config || ''));
+      return { ...vote, ...decompressed };
+    } catch {
+      return vote;
+    }
+  });
 
   useEffect(() => {
     const checkSubscriptionStatus = async () => {
@@ -85,7 +95,8 @@ export const VotingPage = () => {
       {loading ? <p>Loading...</p> : (
         <ul>
           {votes.filter(vote => vote.min_trust === undefined || userTrust >= vote.min_trust).map((vote) => (
-            $1
+            <li key={vote.id}>
+              <Link to={`/issue/${vote.id}`}>{vote.title}</Link>
               {vote.created_by === window?.USER?.genesis && (
                 <div><Link to={`/admin?edit=${vote.id}`}>(edit)</Link></div>
               )}
@@ -96,3 +107,5 @@ export const VotingPage = () => {
     </div>
   );
 };
+
+export default VotingPage;
