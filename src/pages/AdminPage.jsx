@@ -240,21 +240,37 @@ const AdminPage = () => {
 
     try {
       editing ? await nexusVotingService.updateVoteViaBackend({ ...issue, id: editingId }) : await nexusVotingService.createVoteViaBackend(issue);
-      setMessage(`Vote creation request sent to Voting Authority.
-
-Options:
-${optionLabels.map((label) => `  ${label}`).join('
-')}`);
-    } catch (e) {
-      setMessage(`Error: ${e.message}`);
-    }
+      setMessage(`Vote creation request sent to Voting Authority.\n\nOptions:\n${optionLabels.map((label) => `  ${label}`).join('\n')}`);
   };
 
   return (
     <div>
       $1
-      <p>You may upload supporting documents (PDF, Markdown, or TXT only):</p>
+      <p>You may upload supporting documents (PDF, Markdown, or TXT only). You may also unpin previously uploaded files from Infura if you're the original submitter:</p>
       <input type="file" accept=".pdf,.md,.txt" multiple onChange={(e) => setFiles(Array.from(e.target.files))} />
+      {editing && supporting_docs?.length > 0 && (
+        <ul>
+          {supporting_docs.map((doc, i) => (
+            <li key={i}>{doc.name} <button type="button" onClick={async () => {
+              const confirm = window.confirm(`Unpin ${doc.name} from Infura? This will make it less available on IPFS.`);
+              if (!confirm) return;
+              try {
+                const res = await fetch(`${BACKEND_BASE}/unpin`, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ cid: doc.cid })
+                });
+                const data = await res.json();
+                if (data.success) setMessage(`Unpinned ${doc.name} successfully.`);
+                else throw new Error(data.error || 'Unknown error');
+              } catch (e) {
+                console.error(e);
+                setMessage(`Failed to unpin ${doc.name}: ${e.message}`);
+              }
+            }}>🗑 Unpin</button></li>
+          ))}
+        </ul>
+      )}
       <input placeholder="Title" value={title} onChange={(e) => setTitle(e.target.value)} />
       <textarea placeholder="Description (markdown supported)" value={description} onChange={(e) => setDescription(e.target.value)} />
       <textarea placeholder="Summary - Pro Arguments" value={summaryPro} onChange={(e) => setSummaryPro(e.target.value)} />
