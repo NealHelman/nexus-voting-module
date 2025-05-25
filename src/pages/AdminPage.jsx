@@ -6,6 +6,32 @@ import { MIN_TRUST_WEIGHT } from '../constants';
 export import { useLocation } from 'react-router-dom';
 
 const AdminPage = () => {
+  useEffect(() => {
+    const computeByteCount = () => {
+      const fakeDocs = files.map(file => ({ name: file.name, cid: 'placeholder' }));
+      const payload = {
+        title,
+        description,
+        option_labels: optionLabels,
+        min_trust: parseInt(minTrust),
+        vote_finality: voteFinality,
+        organizer_name: organizerName,
+        organizer_telegram: organizerTelegram,
+        deadline: parseInt(deadline),
+        analysis_link: analysisLink,
+        summary_pro: summaryPro,
+        summary_con: summaryCon,
+        possible_outcomes: possibleOutcomes.split('
+').map(s => s.trim()).filter(Boolean),
+        created_by: window?.USER?.genesis || 'unknown',
+        created_at: Math.floor(Date.now() / 1000),
+        supporting_docs: fakeDocs,
+      };
+      const payloadSize = new Blob([JSON.stringify(payload)]).size;
+      setByteCount(payloadSize);
+    };
+    computeByteCount();
+  }, [title, description, optionLabels, minTrust, voteFinality, organizerName, organizerTelegram, deadline, analysisLink, summaryPro, summaryCon, possibleOutcomes]);
   const location = useLocation();
   const params = new URLSearchParams(location.search);
   const editId = params.get('edit');
@@ -52,6 +78,52 @@ const AdminPage = () => {
   }, [editId]);
 
   const createVote = async () => {
+    const payload = {
+      title,
+      description,
+      option_labels: optionLabels,
+      min_trust: parseInt(minTrust),
+      vote_finality: voteFinality,
+      organizer_name: organizerName,
+      organizer_telegram: organizerTelegram,
+      deadline: parseInt(deadline),
+      analysis_link: analysisLink,
+      summary_pro: summaryPro,
+      summary_con: summaryCon,
+      possible_outcomes: possibleOutcomes.split('
+').map(s => s.trim()).filter(Boolean),
+      created_by: window?.USER?.genesis || 'unknown',
+      created_at: Math.floor(Date.now() / 1000),
+      supporting_docs: [],
+    };
+    const payloadSize = new Blob([JSON.stringify(payload)]).size;
+    setByteCount(payloadSize);
+    if (payloadSize > 1024) {
+      setMessage(`Data exceeds the 1KB asset storage limit (actual: ${payloadSize} bytes). Please shorten your input.`);
+      return;
+    }
+    const payloadSize = new Blob([JSON.stringify({
+      title,
+      description,
+      option_labels: optionLabels,
+      min_trust: parseInt(minTrust),
+      vote_finality: voteFinality,
+      organizer_name: organizerName,
+      organizer_telegram: organizerTelegram,
+      deadline: parseInt(deadline),
+      analysis_link: analysisLink,
+      summary_pro: summaryPro,
+      summary_con: summaryCon,
+      possible_outcomes: possibleOutcomes.split('
+').map(s => s.trim()).filter(Boolean),
+      created_by: window?.USER?.genesis || 'unknown',
+      created_at: Math.floor(Date.now() / 1000),
+      supporting_docs: [],
+    })]).size;
+    if (payloadSize > 1024) {
+      setMessage(`Data exceeds the 1KB asset storage limit (actual: ${payloadSize} bytes). Please shorten your input.`);
+      return;
+    }
     const pin = await window.getPIN('This will send ' + (1 + optionLabels.length) + ' NXS to NexusCommunityVoting:default.');
     if (!pin) {
       setMessage('Vote creation cancelled.');
@@ -132,7 +204,11 @@ const AdminPage = () => {
 
     try {
       editing ? await nexusVotingService.updateVoteViaBackend({ ...issue, id: editingId }) : await nexusVotingService.createVoteViaBackend(issue);
-      setMessage(`Vote creation request sent to Voting Authority.\n\nOptions:\n${optionLabels.map((label) => `  ${label}`).join('\n')}`);
+      setMessage(`Vote creation request sent to Voting Authority.
+
+Options:
+${optionLabels.map((label, idx) => `  ${label}`).join('
+')}`);
     } catch (e) {
       setMessage(`Error: ${e.message}`);
     }
@@ -165,7 +241,8 @@ const AdminPage = () => {
       <input placeholder="Telegram Handle (optional)" value={organizerTelegram} onChange={(e) => setOrganizerTelegram(e.target.value)} />
       <input placeholder="Deadline (Unix Timestamp)" value={deadline} onChange={(e) => setDeadline(e.target.value)} />
       <input placeholder="Analysis Link (e.g., cid://...)" value={analysisLink} onChange={(e) => setAnalysisLink(e.target.value)} />
-      <button onClick={createVote}>Submit Vote</button>
+      <p style={{ color: byteCount > 1024 ? 'red' : 'inherit' }}>Current vote size: {byteCount} bytes (max: 1024 bytes)</p>
+      <button onClick={createVote} disabled={byteCount > 1024}>Submit Vote</button>
       <p>{message}</p>
     </div>
   );
