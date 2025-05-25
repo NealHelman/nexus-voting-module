@@ -1,5 +1,6 @@
 // --- Pages: AdminPage.jsx ---
 import React, { useState, useEffect } from 'react';
+import { compressToUTF16, decompressFromUTF16 } from 'lz-string';
 import nexusVotingService from '../services/nexusVotingService';
 import { MIN_TRUST_WEIGHT } from '../constants';
 
@@ -19,16 +20,34 @@ const AdminPage = () => {
         organizer_telegram: organizerTelegram,
         deadline: parseInt(deadline),
         analysis_link: analysisLink,
-        summary_pro: summaryPro,
-        summary_con: summaryCon,
-        possible_outcomes: possibleOutcomes.split('
-').map(s => s.trim()).filter(Boolean),
+        summary_pro: compressToUTF16(summaryPro),
+        summary_con: compressToUTF16(summaryCon),
+        possible_outcomes: compressToUTF16(possibleOutcomes),
         created_by: window?.USER?.genesis || 'unknown',
         created_at: Math.floor(Date.now() / 1000),
         supporting_docs: fakeDocs,
       };
       const payloadSize = new Blob([JSON.stringify(payload)]).size;
       setByteCount(payloadSize);
+      setFieldSizes({
+        summary_pro: new Blob([compressToUTF16(summaryPro)]).size,
+        summary_con: new Blob([compressToUTF16(summaryCon)]).size,
+        possible_outcomes: new Blob([compressToUTF16(possibleOutcomes)]).size,
+        title: new Blob([title]).size,
+        description: new Blob([description]).size,
+        option_labels: new Blob([JSON.stringify(optionLabels)]).size,
+        metadata: new Blob([JSON.stringify({
+          min_trust: parseInt(minTrust),
+          vote_finality,
+          organizer_name,
+          organizer_telegram,
+          deadline,
+          analysis_link,
+          created_by: window?.USER?.genesis || 'unknown',
+          created_at: Math.floor(Date.now() / 1000),
+          supporting_docs: fakeDocs
+        })]).size
+      });
     };
     computeByteCount();
   }, [title, description, optionLabels, minTrust, voteFinality, organizerName, organizerTelegram, deadline, analysisLink, summaryPro, summaryCon, possibleOutcomes]);
@@ -64,10 +83,16 @@ const AdminPage = () => {
         setOrganizerTelegram(data.organizer_telegram || '');
         setDeadline(data.deadline || '');
         setAnalysisLink(data.analysis_link || '');
-        setSummaryPro(data.summary_pro || '');
-        setSummaryCon(data.summary_con || '');
-        setPossibleOutcomes((data.possible_outcomes || []).join('
+        setSummaryPro(decompressFromUTF16(data.summary_pro || '') || '');
+        setSummaryCon(decompressFromUTF16(data.summary_con || '') || '');
+        try {
+          setPossibleOutcomes((decompressFromUTF16(data.possible_outcomes || '') || '').split('
+').map(s => s.trim()).filter(Boolean).join('
 '));
+        } catch (e) {
+          console.warn('Failed to decompress possible_outcomes:', e);
+          setPossibleOutcomes('');
+        }
         setEditing(true);
         setEditingId(editId);
       } catch (e) {
@@ -80,6 +105,17 @@ const AdminPage = () => {
   const createVote = async () => {
     const payload = {
       title,
+      description,
+      option_labels: optionLabels,
+      min_trust: parseInt(minTrust),
+      vote_finality: voteFinality,
+      organizer_name: organizerName,
+      organizer_telegram: organizerTelegram,
+      deadline: parseInt(deadline),
+      analysis_link: analysisLink,
+      summary_pro: compressToUTF16(summaryPro),
+      summary_con: compressToUTF16(summaryCon),
+      possible_outcomes: compressToUTF16(possibleOutcomes),
       description,
       option_labels: optionLabels,
       min_trust: parseInt(minTrust),
@@ -207,7 +243,7 @@ const AdminPage = () => {
       setMessage(`Vote creation request sent to Voting Authority.
 
 Options:
-${optionLabels.map((label, idx) => `  ${label}`).join('
+${optionLabels.map((label) => `  ${label}`).join('
 ')}`);
     } catch (e) {
       setMessage(`Error: ${e.message}`);
@@ -241,7 +277,15 @@ ${optionLabels.map((label, idx) => `  ${label}`).join('
       <input placeholder="Telegram Handle (optional)" value={organizerTelegram} onChange={(e) => setOrganizerTelegram(e.target.value)} />
       <input placeholder="Deadline (Unix Timestamp)" value={deadline} onChange={(e) => setDeadline(e.target.value)} />
       <input placeholder="Analysis Link (e.g., cid://...)" value={analysisLink} onChange={(e) => setAnalysisLink(e.target.value)} />
-      <p style={{ color: byteCount > 1024 ? 'red' : 'inherit' }}>Current vote size: {byteCount} bytes (max: 1024 bytes)</p>
+      <p style={{ color: byteCount > 1024 ? 'red' : 'inherit' }}>
+        Current vote size: {byteCount} bytes (max: 1024 bytes)
+        <span title="Compressed fields: summary_pro, summary_con, possible_outcomes. Supporting docs and property names are included."> 🛈</span>
+      </p>
+      <ul style={{ fontSize: '0.9rem', color: '#ccc', paddingLeft: '1rem' }}>
+        {Object.entries(fieldSizes).map(([key, size]) => (
+          <li key={key}>{key}: {size} bytes</li>
+        ))}
+      </ul>
       <button onClick={createVote} disabled={byteCount > 1024}>Submit Vote</button>
       <p>{message}</p>
     </div>

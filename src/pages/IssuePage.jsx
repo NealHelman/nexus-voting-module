@@ -10,12 +10,24 @@ import remarkGfm from 'remark-gfm';
 import remarkBreaks from 'remark-breaks';
 import rehypeRaw from 'rehype-raw';
 
+import { decompressFromUTF16 } from 'lz-string';
+
 export const IssuePage = () => {
   const { issueId } = useParams();
   const dispatch = useDispatch();
-  const vote = useSelector((state) => state.voting.voteDetails[issueId]);
+  const voteRaw = useSelector((state) => state.voting.voteDetails[issueId]);
+  const vote = voteRaw ? {
+    ...voteRaw,
+    summary_pro: decompressFromUTF16(voteRaw.summary_pro || '') || '',
+    summary_con: decompressFromUTF16(voteRaw.summary_con || '') || '',
+    possible_outcomes: (decompressFromUTF16(voteRaw.possible_outcomes || '') || '').split('
+').map(s => s.trim()).filter(Boolean),
+  } : null;
   const [userVote, setUserVote] = useState(null);
   const [message, setMessage] = useState('');
+  const [byteCount, setByteCount] = useState(0);
+  const [fieldSizes, setFieldSizes] = useState({});
+  const [byteCount, setByteCount] = useState(0);
   const [files, setFiles] = useState([]);
   const [uploading, setUploading] = useState(false);
   const [editing, setEditing] = useState(false);
