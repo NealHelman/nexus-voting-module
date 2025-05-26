@@ -166,7 +166,7 @@ const AdminPage = () => {
       await window.API.post('/finance/debit/account', {
         pin,
         amount: 2 + optionLabels.length,
-        to: 'NexusCommunityVoting:default'
+        to: 'VoteTestAuthority:default'
       });
 
       const optionAccounts = optionLabels.map(() => '');
