@@ -1,6 +1,6 @@
 {
   "name": "nexus-voting-module",
-  "version": "1.0.0",
+  "version": "0.1.0",
   "description": "Nexus Community On-Chain Voting module for Nexus Interface",
   "author": "Neal Helman",
   "license": "MIT",
