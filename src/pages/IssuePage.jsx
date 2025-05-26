@@ -1,37 +1,56 @@
-// --- Pages: IssuePage.jsx ---
-import React, { useEffect, useState } from 'react';
+// Full IssuePage.jsx with ENV-based voting authority
+const {
+  libraries: { React, useEffect, useState },
+  components: { Panel, Button },
+  utilities: { apiCall, send, showErrorDialog, showSuccessDialog },
+} = NEXUS;
+
 import { useParams } from 'react-router-dom';
 import { decompressFromUTF16 } from 'lz-string';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Document, Page, pdfjs } from 'react-pdf';
+import { getVotingConfig } from '../utils/env';
 
 pdfjs.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjs.version}/pdf.worker.js`;
+
+const { ENV, VOTING_SIGCHAIN } = getVotingConfig();
+const BACKEND_BASE = 'https://65.20.79.65:4006';
 
 const IssuePage = () => {
   const { id } = useParams();
   const [issue, setIssue] = useState(null);
-  const [error, setError] = useState(null);
-  const [docsContent, setDocsContent] = useState({});
   const [message, setMessage] = useState('');
   const [userVote, setUserVote] = useState(null);
-  const [loading, setLoading] = useState(false);
   const [voteCounts, setVoteCounts] = useState({});
+  const [docsContent, setDocsContent] = useState({});
 
   useEffect(() => {
     const fetchIssue = async () => {
       try {
-        const res = await window.API.get(`/register/read/${id}`);
-        const data = typeof res.data === 'string' ? JSON.parse(res.data) : res.data;
-        const config = JSON.parse(decompressFromUTF16(data.config));
-        setIssue({ ...data, ...config });
+        const res = await apiCall('register/read', { address: id });
+        const config = JSON.parse(decompressFromUTF16(res.config));
+        setIssue({ ...res, ...config });
       } catch (err) {
-        console.error('Failed to load issue:', err);
-        setError('Failed to load issue');
+        showErrorDialog({ message: 'Failed to load issue', note: err.message });
       }
     };
     fetchIssue();
   }, [id]);
+
+  useEffect(() => {
+    const fetchLiveTally = async () => {
+      if (!issue?.address) return;
+      try {
+        const res = await fetch(`http://(`${BACKEND_BASE}/tally-votes/${issue.address}`);
+        const data = await res.json();
+        setVoteCounts(data);
+      } catch (e) {
+        console.warn('Failed to fetch vote tally:', e);
+      }
+    };
+    fetchLiveTally();
+  }, [issue]);
 
   useEffect(() => {
     const loadDocs = async () => {
@@ -52,82 +71,88 @@ const IssuePage = () => {
     loadDocs();
   }, [issue]);
 
-  useEffect(() => {
-    const checkDuplicateVote = async () => {
-      if (!issue?.option_accounts?.length || !window.USER?.genesis) return;
-      try {
-        const accountChecks = issue.option_accounts.map(addr => `results.contracts.to=${addr}`).join(' OR ');
-        const whereClause = `results.contracts.OP=CREDIT AND results.genesis=${window.USER.genesis} AND (${accountChecks})`;
-        const where = encodeURIComponent(whereClause).replace(/^where=/i, 'WHERE=');
-        const res = await window.API.get(`/ledger/list/transactions?limit=100&WHERE=${where}`);
-        const credits = Array.isArray(res) ? res : res?.results || [];
-        for (const tx of credits) {
-          for (const contract of tx.contracts || []) {
-            if (issue.option_accounts.includes(contract.to)) {
-              setUserVote(contract.to);
-              return;
-            }
-          }
-        }
-      } catch (err) {
-        console.warn('Failed to check for existing vote:', err);
-      }
-    };
-    checkDuplicateVote();
-  }, [issue]);
-
-  useEffect(() => {
-    const fetchLiveTally = async () => {
-      if (!issue?.address) return;
-      try {
-        const res = await fetch(`http://65.20.79.65:4006/tally-votes/${issue.address}`);
-        const data = await res.json();
-        setVoteCounts(data);
-      } catch (e) {
-        console.warn('Failed to fetch vote tally:', e);
-      }
-    };
-    fetchLiveTally();
-  }, [issue]);
-
-  const handleVote = async (account) => {
-    const pin = await window.getPIN(`You are about to vote for this option.\nThis will send 0.000001 NXS to:\n${account}`);
-    if (!pin) return;
+  const handleVote = async (accountName, label) => {
     try {
-      setLoading(true);
-      await window.API.post('/finance/debit/account', {
-        pin,
-        amount: 0.000001,
-        to: account
+      const { address: senderAddress } = await apiCall('finance/get/account/address', { name: 'default' });
+      const recipientName = accountName.includes(':') ? accountName : `${VOTING_SIGCHAIN}:${accountName}`;
+      const { address: recipientAddress } = await apiCall('finance/get/account/address', { name: recipientName });
+      await send({
+        sendFrom: senderAddress,
+        recipients: [
+          {
+            address: recipientAddress,
+            amount: '0.000001',
+            reference: 0,
+          },
+        ],
+        advancedOptions: true,
       });
-      setMessage('✅ Vote submitted successfully.');
-      setUserVote(account);
+
+      const where = `results.contracts.OP=CREDIT AND results.contracts.to.address=${recipientAddress} AND results.contracts.from.address=${senderAddress} AND results.contracts.amount=0.000001 AND results.confirmations>1`;
+      const maxWaitMs = 10 * 60 * 1000;
+      const pollIntervalMs = 10000;
+      const start = Date.now();
+
+      while (Date.now() - start < maxWaitMs) {
+        try {
+          const res = await apiCall('ledger/list/transactions', {
+            limit: 1,
+            verbose: "summary",
+            where,
+          });
+          if (Array.isArray(res) && res[0]?.txid) {
+            showSuccessDialog({ message: `Vote for "${label}" confirmed.` });
+            setUserVote(recipientAddress);
+            return;
+          }
+        } catch {}
+        await new Promise(resolve => setTimeout(resolve, pollIntervalMs));
+      }
+
+      showErrorDialog({ message: 'Timeout waiting for vote confirmation.' });
+
+      showSuccessDialog({ message: `Vote for "${label}" submitted successfully. Transfer pending confirmation.` });
+      setUserVote(recipientAddress);
     } catch (e) {
-      setMessage(`❌ Error submitting vote: ${e.message}`);
-    } finally {
-      setLoading(false);
+      showErrorDialog({ message: 'Vote submission failed', note: e.message });
     }
   };
 
-  if (error) return <p>{error}</p>;
   if (!issue) return <p>Loading...</p>;
 
   return (
-    <div>
-      <h2>{issue.title}</h2>
-
-      {issue.description && <><p><strong>Description:</strong></p><div className="nxs-box"><ReactMarkdown>{issue.description}</ReactMarkdown></div></>}
-
+    <Panel title={issue.title}>
+      {issue.description && <><p><strong>Description:</strong></p><ReactMarkdown remarkPlugins={[remarkGfm]}>{issue.description}</ReactMarkdown></>}
       <p><strong>Organizer:</strong> {issue.organizer_name}</p>
-      <p><strong>Telegram:</strong> {issue.organizer_telegram}</p>
-      <p><strong>Deadline:</strong> {new Date(issue.deadline * 1000).toLocaleString()}</p>
+      {issue.organizer_telegram && (
+          <p>
+            <strong>Telegram:</strong>{' '}
+            <a
+              href={`https://t.me/${issue.organizer_telegram.replace(/^@/, '')}`}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              {issue.organizer_telegram}
+            </a>
+          </p>
+        )}
+      <p><strong>Created By:</strong> {issue.created_by}</p>
+      <p><strong>Created At:</strong> {new Date(issue.created_at * 1000).toLocaleString()}</p>
 
-      {issue.summary_pro && <><p><strong>Summary (Pro):</strong></p><div className="nxs-box"><ReactMarkdown>{issue.summary_pro}</ReactMarkdown></div></>}
-      {issue.summary_con && <><p><strong>Summary (Con):</strong></p><div className="nxs-box"><ReactMarkdown>{issue.summary_con}</ReactMarkdown></div></>}
-      {issue.possible_outcomes?.length > 0 && (
+      {issue.deadline ? (
+      <p><strong>Deadline:</strong> {new Date(issue.deadline * 1000).toLocaleString()}</p>
+    ) : (
+      <p><strong>Deadline:</strong> Not set</p>
+    )}
+
+
+      {issue.summary_pro && <><p><strong>Summary (Pro):</strong></p><ReactMarkdown remarkPlugins={[remarkGfm]}>{issue.summary_pro}</ReactMarkdown></>}
+      {issue.summary_con && <><p><strong>Summary (Con):</strong></p><ReactMarkdown remarkPlugins={[remarkGfm]}>{issue.summary_con}</ReactMarkdown></>}
+
+      {issue.possible_outcomes && (
         <div>
           <p><strong>Possible Outcomes:</strong></p>
-          <ul>{issue.possible_outcomes.map((outcome, i) => <li key={i}>{outcome}</li>)}</ul>
+          <ul>{issue.possible_outcomes.split('\n').map((outcome, i) => <li key={i}>{outcome}</li>)}</ul>
         </div>
       )}
 
@@ -143,13 +168,13 @@ const IssuePage = () => {
               return (
                 <li key={opt}>
                   {label}: {opt}
-                  <button
-                    onClick={() => handleVote(opt)}
-                    disabled={issue.vote_finality === 'one_time' && userVote !== null || loading}
+                  <Button
+                    onClick={() => handleVote(opt, label)}
+                    disabled={issue.vote_finality === 'one_time' && userVote !== null}
                     style={{ marginLeft: '1em' }}
                   >
                     Vote
-                  </button>
+                  </Button>
                   {userVote === opt && <span> ✅ Your Vote</span>}<br />
                   <small>Votes: {voteCounts?.[opt] ?? '...'}</small>
                 </li>
@@ -158,8 +183,6 @@ const IssuePage = () => {
           </ul>
         </div>
       )}
-
-      {message && <p>{message}</p>}
 
       {issue.supporting_docs?.length > 0 && (
         <div>
@@ -176,7 +199,7 @@ const IssuePage = () => {
                       <Page pageNumber={1} />
                     </Document>
                   ) : docData.type.includes('markdown') || doc.name.endsWith('.md') ? (
-                    <ReactMarkdown children={docData.content} remarkPlugins={[remarkGfm]} />
+                    <ReactMarkdown remarkPlugins={[remarkGfm]}>{docData.content}</ReactMarkdown>
                   ) : (
                     <pre>{docData.content}</pre>
                   )
@@ -188,7 +211,9 @@ const IssuePage = () => {
           })}
         </div>
       )}
-    </div>
+
+      {message && <p>{message}</p>}
+    </Panel>
   );
 };
 
