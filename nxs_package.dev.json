@@ -1,8 +1,10 @@
 {
   "name": "_dev_nexus-voting-module",
-  "displayName": "React Redux Module Development",
+  "version": "0.1.0",
+  "displayName": "Nexus Voting Module Development",
   "description": "Nexus Community On-Chain Voting module for Nexus Interface",
   "type": "app",
   "entry": "http://localhost:24011/dev.html",
+  "permissions": [],
   "icon": "dist/react.svg"
 }

@@ -6,8 +6,9 @@ export default {
   devtool: 'source-map',
   entry: './src/index.js',
   output: {
-    path: path.resolve(__dirname, 'dist/js'),
-    filename: 'app.js',
+    path: path.resolve(__dirname, 'dist'),
+    filename: 'js/app.js',
+    publicPath: '/', //
   },
   target: 'web',
   module: {
@@ -26,5 +27,6 @@ export default {
   },
   resolve: {
     alias: webpackAliases,
+    modules: [path.resolve(__dirname, 'src'), 'node_modules'],
   },
 };
