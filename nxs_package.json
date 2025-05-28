@@ -13,6 +13,7 @@
     "dist/react.svg"
   ],
   "author": {
-    "name": "Neal Helman"
+    "name": "Neal Helman",
+    "email": "neal.helman@nexus.io"
   }
 }
