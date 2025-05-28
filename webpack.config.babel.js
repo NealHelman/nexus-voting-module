@@ -6,7 +6,7 @@ const isProd = process.env.NODE_ENV === 'production';
 export default {
   mode: process.env.NODE_ENV || 'development',
   devtool: 'source-map',
-  entry: './src/index.js',
+  entry: ['./src/react-shim.js', './src/index.js'],
   output: {
     path: path.resolve(__dirname, 'dist'),
     filename: 'app.js',
