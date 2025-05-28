@@ -1,15 +1,18 @@
 {
-  "name": "react_redux_module_template",
-  "displayName": "React Redux Module",
-  "version": "0.4.0",
-  "targetWalletVersion": "3.1.0",
-  "description": "A Nexus Wallet Module template built with React and Redux, also includes boilerplate code and example usages of some Nexus Wallet Module's advanced features",
+  "name": "nexus-voting-module",
+  "displayName": "Nexus Voting",
+  "version": "0.1.0",
+  "targetWalletVersion": "3.1.5",
+  "description": "On-chain community voting system.",
   "type": "app",
   "entry": "dist/index.html",
-  "icon": "dist/react.svg",
-  "files": ["dist/index.html", "dist/react.svg", "dist/js/app.js"],
+  "react": "dist/react.svg",
+  "files": [
+    "dist/index.html",
+    "dist/app.js",
+    "dist/react.svg"
+  ],
   "author": {
-    "name": "Krysto",
-    "email": "quy.p.hoang@gmail.com"
+    "name": "Neal Helman"
   }
 }

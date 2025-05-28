@@ -9,27 +9,35 @@
     "@babel/plugin-proposal-optional-chaining": "^7.18.9",
     "@babel/plugin-transform-react-constant-elements": "^7.18.9",
     "@babel/plugin-transform-react-inline-elements": "^7.18.6",
-    "@babel/preset-env": "^7.18.9",
-    "@babel/preset-react": "^7.18.6",
+    "@babel/preset-env": "^7.27.2",
+    "@babel/preset-react": "^7.27.1",
     "@babel/register": "^7.18.9",
-    "babel-loader": "^8.2.5",
+    "babel-loader": "^8.4.1",
     "babel-plugin-dev-expression": "^0.2.3",
     "babel-plugin-module-resolver": "^4.1.0",
     "babel-plugin-transform-react-pure-class-to-function": "^1.0.1",
     "babel-plugin-transform-react-remove-prop-types": "^0.4.24",
     "cross-env": "^7.0.3",
+    "html-webpack-plugin": "^5.6.3",
+    "rimraf": "^6.0.1",
     "webpack": "^5.73.0",
     "webpack-cli": "^4.10.0",
     "webpack-dev-server": "^4.9.3"
   },
   "scripts": {
     "build": "cross-env NODE_ENV=production webpack --config webpack.config.babel.js",
-    "dev": "cross-env NODE_ENV=development webpack serve --config webpack-dev.config.babel.js"
+    "dev": "cross-env NODE_ENV=development webpack serve --config webpack-dev.config.babel.js",
+    "zip": "npm run build && cd dist && zip -r ../nexus-voting-module.zip ."
   },
   "dependencies": {
+    "@reduxjs/toolkit": "^2.8.2",
+    "lz-string": "^1.5.0",
     "nexus-module": "^1.0.0-alpha.9",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-markdown": "^8.0.7",
     "react-redux": "^8.0.2",
-    "redux": "^4.2.0",
-	"react-markdown": "^8.0.7"
+    "react-router-dom": "^6.3.0",
+    "redux": "^4.2.0"
   }
 }

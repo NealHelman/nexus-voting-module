@@ -5,6 +5,7 @@
   "displayName": "Nexus Voting Module Development",
   "description": "Nexus Community On-Chain Voting module for Nexus Interface",
   "type": "app",
-  "entry": "dist/dev.html",
+  "entry": "http://localhost:24011/dev.html",
+  "permissions": [],
   "icon": "dist/react.svg"
 }

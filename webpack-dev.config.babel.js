@@ -10,7 +10,7 @@ const config = {
   devServer: {
     port,
     devMiddleware: {
-      publicPath,
+    publicPath: '/',
     },
     compress: true,
     headers: { 'Access-Control-Allow-Origin': '*' },
@@ -19,6 +19,6 @@ const config = {
       watch: true,
     },
   },
-};
+}; 
 
 export default config;

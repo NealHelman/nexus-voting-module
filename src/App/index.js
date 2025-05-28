@@ -1,7 +1,6 @@
 import { useSelector } from 'react-redux';
 import { ModuleWrapper } from 'nexus-module';
-
-import Main from './Main';
+import VotingPage from '../pages/VotingPage.jsx';
 
 export default function App() {
   const initialized = useSelector((state) => state.nexus.initialized);
@@ -9,7 +8,7 @@ export default function App() {
 
   return (
     <ModuleWrapper initialized={initialized} theme={theme}>
-      <Main />
+      <VotingPage />
     </ModuleWrapper>
   );
 }
