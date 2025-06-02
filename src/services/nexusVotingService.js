@@ -3,6 +3,11 @@ const API = window.API;
 const BACKEND_BASE = 'http://65.20.79.65:4006';
 
 const nexusVotingService = {
+  export async function getProtectedValues() {
+    const res = await fetch(`${BACKEND_BASE}/module/protected-values`);
+    return res.json();
+  },
+ 
   async getAllVotes() {
     const params = {
       limit: 1000,

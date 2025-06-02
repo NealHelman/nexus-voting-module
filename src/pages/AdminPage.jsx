@@ -73,6 +73,12 @@ const AdminPage = () => {
   }, []);
 
   useEffect(() => {
+    getProtectedValues().then(values => {
+    setMinTrust(values.MIN_TRUST);
+    });
+  }, []);
+
+  useEffect(() => {
     const computeByteCount = () => {
       const config = {
         title,

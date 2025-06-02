@@ -1,1 +1,0 @@
-export const MIN_TRUST_WEIGHT = 1000000;
