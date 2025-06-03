@@ -7,6 +7,14 @@ const nexusVotingService = {
     const res = await fetch(`${BACKEND_BASE}/module/protected-values`);
     return res.json();
   },
+  
+  export async function getWeightedResults(slug) {
+	  const response = await fetch(`${BACKEND_BASE}/weighted-results/${slug}`);
+	  if (!response.ok) {
+		throw new Error('Failed to fetch weighted vote results');
+	  }
+	  return await response.json();
+	}
  
   async getAllVotes() {
     const params = {

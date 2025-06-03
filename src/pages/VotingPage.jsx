@@ -8,32 +8,25 @@ const {
 import { useDispatch, useSelector } from 'react-redux';
 import { fetchVotes } from '../features/voteSlice';
 import { Link } from 'react-router-dom';
-import { MIN_TRUST_WEIGHT } from '../constants';
 import { decompressFromUTF16 } from 'lz-string';
 import { getVotingConfig } from '../utils/env';
+import { fetchVotes, fetchWeightedVoteCounts } from '../services/nexusVotingService';
 
 const { ENV, VOTING_SIGCHAIN } = getVotingConfig();
 const BACKEND_BASE = 'https://65.20.79.65:4006';
 
-export const VotingPage = () => {
+export default function VotingPage({ userGenesis }) {
   const [filter, setFilter] = useState('active');
   const [sortOrder, setSortOrder] = useState('newest');
   const dispatch = useDispatch();
-  const { votes: rawVotes, loading } = useSelector((state) => state.voting);
   const [canAccessAdmin, setCanAccessAdmin] = useState(false);
   const [userGenesis, setUserGenesis] = useState(null);
   const [subscribed, setSubscribed] = useState(false);
   const [userTrust, setUserTrust] = useState(0);
+  const [votes, setVotes] = useState([]);
+  const [weightedVoteCounts, setWeightedVoteCounts] = useState({});
 
-  const votes = rawVotes.map(vote => {
-    try {
-      const decompressed = JSON.parse(decompressFromUTF16(vote.config || ''));
-      return { ...vote, ...decompressed };
-    } catch {
-      return vote;
-    }
-  });
-  
+
   useEffect(() => {
     getProtectedValues().then(values => {
     setMinTrust(values.MIN_TRUST);
@@ -97,28 +90,16 @@ export const VotingPage = () => {
   };
 
   useEffect(() => {
-    const fetchTallyCounts = async () => {
-      try {
-        const updatedVotes = await Promise.all(
-          votes.map(async (vote) => {
-            try {
-              const res = await fetch(`${BACKEND_BASE}/tally-votes/${vote.address}`);
-              const data = await res.json();
-              return { ...vote, tally: data };
-            } catch {
-              return { ...vote, tally: null };
-            }
-          })
-        );
-        setVoteList(updatedVotes);
-      } catch (e) {
-        console.warn('Tally preview failed', e);
-      }
-    };
-    fetchTallyCounts();
-  }, [rawVotes]);
+    async function loadVotes() {
+      const fetchedVotes = await fetchVotes();
+      setVotes(fetchedVotes);
 
-  const [voteList, setVoteList] = useState(votes);
+      const weighted = await fetchWeightedVoteCounts();
+      setWeightedVoteCounts(weighted);
+    }
+
+    loadVotes();
+  }, []);
 
   return (
     <Panel title="Nexus Community Voting">
@@ -163,17 +144,24 @@ export const VotingPage = () => {
                 ? b.created_at - a.created_at
                 : a.created_at - b.created_at;
             })
-            .map((vote) => (
+          {votes.map((vote) => (
             <li key={vote.id}>
               <Link to={`/issue/${vote.id}`}>{vote.title}</Link>
               {vote.creator_genesis && vote.creator_genesis === userGenesis && (
                 <div><Link to={`/admin?edit=${vote.id}`}>(edit)</Link></div>
               )}
-              {vote.tally && (
+              {vote.optionAccounts && (
                 <ul style={{ fontSize: '0.9rem' }}>
-                  {Object.entries(vote.tally).map(([addr, count]) => (
-                    <li key={addr}>{addr.slice(0, 6)}...: {count} votes</li>
-                  ))}
+                  {vote.optionAccounts.map((opt, idx) => {
+                    const label = vote.option_labels?.[idx] || `Option ${idx + 1}`;
+                    const weightedCount = weightedVoteCounts?.[vote.slug]?.[opt] ?? '...';
+
+                    return (
+                      <li key={opt}>
+                        <strong>{label}</strong>: {weightedCount} weighted NXS
+                      </li>
+                    );
+                  })}
                 </ul>
               )}
             </li>

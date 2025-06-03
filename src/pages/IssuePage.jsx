@@ -1,4 +1,3 @@
-// Full IssuePage.jsx with ENV-based voting authority
 const {
   libraries: { React, useEffect, useState },
   components: { Panel, Button },
@@ -11,18 +10,17 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Document, Page, pdfjs } from 'react-pdf';
 import { getVotingConfig } from '../utils/env';
+import { getWeightedResults } from '../services/nexusVotingService';
 
 pdfjs.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjs.version}/pdf.worker.js`;
 
 const { ENV, VOTING_SIGCHAIN } = getVotingConfig();
-const BACKEND_BASE = 'https://65.20.79.65:4006';
 
 const IssuePage = () => {
   const { id } = useParams();
   const [issue, setIssue] = useState(null);
   const [message, setMessage] = useState('');
   const [userVote, setUserVote] = useState(null);
-  const [voteCounts, setVoteCounts] = useState({});
   const [docsContent, setDocsContent] = useState({});
 
   useEffect(() => {
@@ -39,18 +37,21 @@ const IssuePage = () => {
   }, [id]);
 
   useEffect(() => {
-    const fetchLiveTally = async () => {
-      if (!issue?.address) return;
+    async function fetchVoteWeights() {
       try {
-        const res = await fetch(`http://(`${BACKEND_BASE}/tally-votes/${issue.address}`);
-        const data = await res.json();
-        setVoteCounts(data);
-      } catch (e) {
-        console.warn('Failed to fetch vote tally:', e);
+        const weighted = await getWeightedResults(issue?.slug);
+        setIssue(prev => ({ ...prev, voteCounts: weighted }));
+      } catch (err) {
+        console.error('Failed to fetch weighted results:', err);
       }
-    };
-    fetchLiveTally();
-  }, [issue]);
+    }
+
+    if (issue?.slug) {
+      fetchVoteWeights();
+      const interval = setInterval(fetchVoteWeights, 30000);
+      return () => clearInterval(interval);
+    }
+  }, [issue?.slug]);
 
   useEffect(() => {
     const loadDocs = async () => {
@@ -73,22 +74,33 @@ const IssuePage = () => {
 
   const handleVote = async (accountName, label) => {
     try {
-      const { address: senderAddress } = await apiCall('finance/get/account/address', { name: 'default' });
       const recipientName = accountName.includes(':') ? accountName : `${VOTING_SIGCHAIN}:${accountName}`;
       const { address: recipientAddress } = await apiCall('finance/get/account/address', { name: recipientName });
+
+      // Get the current user's genesis hash to lookup their trust account
+      const session = await apiCall('sessions/status/local');
+      const voterSigchain = session?.genesis ? `${session.genesis}` : null;
+      if (!voterSigchain) throw new Error('Unable to determine voter identity');
+
+      // Get voter's trust account info
+      const trustAccount = await apiCall('finance/get/trust', { name: `${voterSigchain}:trust` });
+      const trust = trustAccount.trust || 0;
+      const stake = trustAccount.stake || 0;
+      const weightedVote = trust * (stake / 1000000);
+
       await send({
-        sendFrom: senderAddress,
+        sendFrom: 'default',
         recipients: [
           {
             address: recipientAddress,
             amount: '0.000001',
-            reference: 0,
+            reference: weightedVote.toFixed(6),
           },
         ],
         advancedOptions: true,
       });
 
-      const where = `results.contracts.OP=CREDIT AND results.contracts.to.address=${recipientAddress} AND results.contracts.from.address=${senderAddress} AND results.contracts.amount=0.000001 AND results.confirmations>1`;
+      const where = `results.contracts.OP=CREDIT AND results.contracts.to.address=${recipientAddress} AND results.contracts.amount=0.000001 AND results.confirmations>1`;
       const maxWaitMs = 10 * 60 * 1000;
       const pollIntervalMs = 10000;
       const start = Date.now();
@@ -97,8 +109,8 @@ const IssuePage = () => {
         try {
           const res = await apiCall('ledger/list/transactions', {
             limit: 1,
-            verbose: "summary",
-            where,
+            verbose: 'summary',
+            WHERE: where,
           });
           if (Array.isArray(res) && res[0]?.txid) {
             showSuccessDialog({ message: `Vote for "${label}" confirmed.` });
@@ -110,7 +122,6 @@ const IssuePage = () => {
       }
 
       showErrorDialog({ message: 'Timeout waiting for vote confirmation.' });
-
       showSuccessDialog({ message: `Vote for "${label}" submitted successfully. Transfer pending confirmation.` });
       setUserVote(recipientAddress);
     } catch (e) {
@@ -125,28 +136,26 @@ const IssuePage = () => {
       {issue.description && <><p><strong>Description:</strong></p><ReactMarkdown remarkPlugins={[remarkGfm]}>{issue.description}</ReactMarkdown></>}
       <p><strong>Organizer:</strong> {issue.organizer_name}</p>
       {issue.organizer_telegram && (
-          <p>
-            <strong>Telegram:</strong>{' '}
-            <a
-              href={`https://t.me/${issue.organizer_telegram.replace(/^@/, '')}`}
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              {issue.organizer_telegram}
-            </a>
-          </p>
-        )}
+        <p>
+          <strong>Telegram:</strong>{' '}
+          <a
+            href={`https://t.me/${issue.organizer_telegram.replace(/^@/, '')}`}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            {issue.organizer_telegram}
+          </a>
+        </p>
+      )}
       <p><strong>Created By:</strong> {issue.created_by}</p>
       <p><strong>Created At:</strong> {new Date(issue.created_at * 1000).toLocaleString()}</p>
-
       {issue.deadline ? (
-      <p><strong>Deadline:</strong> {new Date(issue.deadline * 1000).toLocaleString()}</p>
-    ) : (
-      <p><strong>Deadline:</strong> Not set</p>
-    )}
+        <p><strong>Deadline:</strong> {new Date(issue.deadline * 1000).toLocaleString()}</p>
+      ) : (
+        <p><strong>Deadline:</strong> Not set</p>
+      )}
 
-
-      {issue.summary_pro && <><p><strong>Summary (Pro):</strong></p><ReactMarkdown remarkPlugins={[remarkGfm]}>{issue.summary_pro}</ReactMarkdown></>}
+      {issue.summary_pro && <><p><strong>Summary (Pro):</p><ReactMarkdown remarkPlugins={[remarkGfm]}>{issue.summary_pro}</ReactMarkdown></>}
       {issue.summary_con && <><p><strong>Summary (Con):</strong></p><ReactMarkdown remarkPlugins={[remarkGfm]}>{issue.summary_con}</ReactMarkdown></>}
 
       {issue.possible_outcomes && (
@@ -176,7 +185,7 @@ const IssuePage = () => {
                     Vote
                   </Button>
                   {userVote === opt && <span> ✅ Your Vote</span>}<br />
-                  <small>Votes: {voteCounts?.[opt] ?? '...'}</small>
+                  <small>Weighted NXS (Trust x Stake): {issue.voteCounts?.[opt] ?? '...'}</small>
                 </li>
               );
             })}
