@@ -2,17 +2,19 @@
 const {
   libraries: { React, useEffect, useState },
   components: { Button, Panel, Dropdown },
-  utilities: { apiCall, showErrorDialog },
+  utilities: { apiCall, confirm, showErrorDialog },
 } = NEXUS;
 
 import { useDispatch, useSelector } from 'react-redux';
-import { fetchVotes } from '../features/voteSlice';
+import { proxyRequest } from 'nexus-module';
 import { Link } from 'react-router-dom';
 import { decompressFromUTF16 } from 'lz-string';
-import { getVotingConfig } from '../utils/env';
-import { fetchVotes, fetchWeightedVoteCounts } from '../services/nexusVotingService';
+import { fetchWeightedVoteCounts } from '../services/nexusVotingService';
+import { getVotingConfig, getWalletUserInfo } from '../utils/env';
 
 const { ENV, VOTING_SIGCHAIN } = getVotingConfig();
+const { username, genesis } = getWalletUserInfo();
+
 const BACKEND_BASE = 'https://65.20.79.65:4006';
 
 export default function VotingPage({ userGenesis }) {
@@ -23,7 +25,6 @@ export default function VotingPage({ userGenesis }) {
   const [userGenesis, setUserGenesis] = useState(null);
   const [subscribed, setSubscribed] = useState(false);
   const [userTrust, setUserTrust] = useState(0);
-  const [votes, setVotes] = useState([]);
   const [weightedVoteCounts, setWeightedVoteCounts] = useState({});
 
 
@@ -36,9 +37,10 @@ export default function VotingPage({ userGenesis }) {
   useEffect(() => {
     const checkSubscriptionStatus = async () => {
       try {
-        const genesis = window?.USER?.genesis;
-        if (!genesis) return;
-        const res = await fetch(`${BACKEND_BASE}/subscription-status/${genesis}`);
+        const { res } = await proxyRequest(
+          `${BACKEND_BASE}/subscription-status/${genesis}`),
+          { method: 'GET', null }
+        );
         const data = await res.json();
         setSubscribed(data.subscribed);
       } catch (e) {
@@ -48,9 +50,7 @@ export default function VotingPage({ userGenesis }) {
 
     const checkTrust = async () => {
       try {
-        const genesis = window?.USER?.genesis;
-        if (!genesis) return;
-        const res = await apiCall('finance/get/account', { name: `${genesis}:trust` });
+        const res = await apiCall('finance/get/account', { name: `${username}:trust` });
         const trust = parseInt(res?.trust || 0);
         setUserTrust(trust);
         if (trust >= MIN_TRUST_WEIGHT) setCanAccessAdmin(true);
@@ -74,26 +74,29 @@ export default function VotingPage({ userGenesis }) {
   const handleSubscriptionToggle = async () => {
     const email = await window.getInput('Enter your email for voting issue announcements:');
     if (!email) return;
-    const pin = await window.getPIN('Please enter your PIN to confirm:');
-    if (!pin) return;
-    const endpoint = subscribed ? '/unsubscribe' : '/subscribe';
-    try {
-      await fetch(`${BACKEND_BASE}${endpoint}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, pin, genesis: window?.USER?.genesis })
-      });
-      setSubscribed(!subscribed);
-    } catch (e) {
-      console.error(`Failed to ${subscribed ? 'unsubscribe' : 'subscribe'}:`, e);
-    }
+    await confirm({options.question : "Please confirm your subscription change"})
+          then((agreed) => {
+          if (agreed) {
+            const endpoint = subscribed ? '/unsubscribe' : '/subscribe';
+            try {
+              await proxyRequest(
+                `${BACKEND_BASE}${endpoint}`,
+                {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email, genesis: window?.USER?.genesis })
+              });
+              setSubscribed(!subscribed);
+            } catch (e) {
+              console.error(`Failed to ${subscribed ? 'unsubscribe' : 'subscribe'}:`, e);
+            }
+          } else {
+            return;
+          }
   };
 
   useEffect(() => {
     async function loadVotes() {
-      const fetchedVotes = await fetchVotes();
-      setVotes(fetchedVotes);
-
       const weighted = await fetchWeightedVoteCounts();
       setWeightedVoteCounts(weighted);
     }

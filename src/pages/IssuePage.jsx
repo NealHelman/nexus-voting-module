@@ -5,16 +5,19 @@ const {
 } = NEXUS;
 
 import { useParams } from 'react-router-dom';
+import { proxyRequest } from 'nexus-module';
 import { decompressFromUTF16 } from 'lz-string';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Document, Page, pdfjs } from 'react-pdf';
-import { getVotingConfig } from '../utils/env';
 import { getWeightedResults } from '../services/nexusVotingService';
-
-pdfjs.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjs.version}/pdf.worker.js`;
+import { getVotingConfig, getWalletUserInfo } from '../utils/env';
 
 const { ENV, VOTING_SIGCHAIN } = getVotingConfig();
+const { username, genesis } = getWalletUserInfo();
+
+
+pdfjs.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjs.version}/pdf.worker.js`;
 
 const IssuePage = () => {
   const { id } = useParams();
@@ -26,7 +29,10 @@ const IssuePage = () => {
   useEffect(() => {
     const fetchIssue = async () => {
       try {
-        const res = await apiCall('register/read', { address: id });
+        const { res } = await proxyRequest(
+          'register/read', { address: id },
+          { method: 'GET', null }
+        );
         const config = JSON.parse(decompressFromUTF16(res.config));
         setIssue({ ...res, ...config });
       } catch (err) {
@@ -59,7 +65,10 @@ const IssuePage = () => {
       const newDocsContent = {};
       for (const doc of issue.supporting_docs) {
         try {
-          const res = await fetch(`https://ipfs.io/ipfs/${doc.cid}`);
+          const { res } = await proxyRequest(
+            `https://ipfs.io/ipfs/${doc.cid}`,
+            { method: 'GET', null }
+          );
           const contentType = res.headers.get('Content-Type');
           const text = await res.text();
           newDocsContent[doc.cid] = { content: text, type: contentType };
@@ -77,13 +86,8 @@ const IssuePage = () => {
       const recipientName = accountName.includes(':') ? accountName : `${VOTING_SIGCHAIN}:${accountName}`;
       const { address: recipientAddress } = await apiCall('finance/get/account/address', { name: recipientName });
 
-      // Get the current user's genesis hash to lookup their trust account
-      const session = await apiCall('sessions/status/local');
-      const voterSigchain = session?.genesis ? `${session.genesis}` : null;
-      if (!voterSigchain) throw new Error('Unable to determine voter identity');
-
       // Get voter's trust account info
-      const trustAccount = await apiCall('finance/get/trust', { name: `${voterSigchain}:trust` });
+      const trustAccount = await apiCall('finance/get/trust', { name: `${username}:trust` });
       const trust = trustAccount.trust || 0;
       const stake = trustAccount.stake || 0;
       const weightedVote = trust * (stake / 1000000);

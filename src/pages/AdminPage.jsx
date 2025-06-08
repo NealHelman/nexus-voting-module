@@ -12,10 +12,12 @@ const {
 import { compressToUTF16 } from 'lz-string';
 import nexusVotingService from '../services/nexusVotingService';
 import { MIN_TRUST_WEIGHT } from '../constants';
-import { getVotingConfig } from '../utils/env';
 import axios from 'axios';
+import { proxyRequest } from 'nexus-module';
+import { getVotingConfig, getWalletUserInfo } from '../utils/env';
 
 const { ENV, VOTING_SIGCHAIN } = getVotingConfig();
+const { username, genesis } = getWalletUserInfo();
 const BACKEND_BASE = 'https://65.20.79.65:4006';
 
 const AdminPage = () => {
@@ -37,10 +39,11 @@ const AdminPage = () => {
   const [createdBy, setCreatedBy] = useState('');
   const [uploadProgress, setUploadProgress] = useState({});
   const [createdAt, setCreatedAt] = useState(null);
-  const [creatorGenesis, setCreatorGenesis] = useState(null);
+  const [creatorGenesis, setCreatorGenesis] = genesis;
 
 
   useEffect(() => {
+    // TODO: Replace population of "genesis" with const declared above
     apiCall('sessions/status/local')
       .then((res) => setCreatorGenesis(res?.genesis))
       .catch(() => setCreatorGenesis(null));
