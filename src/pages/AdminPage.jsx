@@ -15,6 +15,7 @@ import { MIN_TRUST_WEIGHT } from '../constants';
 import axios from 'axios';
 import { proxyRequest } from 'nexus-module';
 import { getVotingConfig, getWalletUserInfo } from '../utils/env';
+import { sha256FromFile } from '../utils/ipfs';
 
 const { ENV, VOTING_SIGCHAIN } = getVotingConfig();
 const { username, genesis } = getWalletUserInfo();
@@ -48,7 +49,13 @@ const AdminPage = () => {
       .then((res) => setCreatorGenesis(res?.genesis))
       .catch(() => setCreatorGenesis(null));
 
-    const searchParams = new URLSearchParams(window.location.search);
+	const computeHash = async (file) => {
+	  const buffer = await file.arrayBuffer();
+	  const hashBuffer = await crypto.subtle.digest('SHA-256', buffer);
+	  return Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2, '0')).join('');
+	};
+
+	const searchParams = new URLSearchParams(window.location.search);
     const editId = searchParams.get('edit');
     if (editId) {
       apiCall('assets/get/asset', { address: editId })
@@ -134,12 +141,13 @@ const AdminPage = () => {
             [file.name]: percent
           }));
         }
+		const sha256 = await computeHash(file);
 
         });
         if (!/^Qm[1-9A-HJ-NP-Za-km-z]{44}$/.test(res.data.Hash)) {
             throw new Error('Invalid CID returned from IPFS');
         }
-        updatedFiles.push({ name: file.name, cid: res.data.Hash });
+        updatedFiles.push({ name: file.name, cid: res.data.Hash, sha256 });
       } catch (e) {
         console.error('Upload error:', file.name, e);
         setMessage(`Failed to upload ${file.name}`);
