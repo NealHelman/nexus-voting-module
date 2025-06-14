@@ -1,10 +1,8 @@
 {
-  "id": "nexus-voting-module",
-  "name": "nexus-voting-module",
-  "version": "0.1.0",
-  "displayName": "Nexus Voting Module Development",
+  "name": "_dev_nexus-voting-module",
+  "displayName": "Nexus Community On-Chain Voting Module",
   "description": "Nexus Community On-Chain Voting module for Nexus Interface",
   "type": "app",
-  "entry": "dist/dev.html",
+  "entry": "http://localhost:24011/dev.html",
   "icon": "dist/react.svg"
 }

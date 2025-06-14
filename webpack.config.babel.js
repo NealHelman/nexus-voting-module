@@ -1,17 +1,13 @@
-import path from 'path';
-import { webpackAliases } from 'nexus-module';
+const path = require('node:path');
+const webpackAliases = require('nexus-module/lib/webpackAliases').default;
 
-const isProd = process.env.NODE_ENV === 'production';
-
-export default {
-  mode: process.env.NODE_ENV || 'development',
+module.exports = {
+  mode: process.env.NODE_ENV,
   devtool: 'source-map',
-  entry: ['./src/react-shim.js', './src/index.js'],
+  entry: './src/index.js',
   output: {
-    path: path.resolve(__dirname, 'dist'),
+    path: path.resolve(__dirname, 'dist/js'),
     filename: 'app.js',
-    publicPath: '/',
-    clean: false, // Prevents wiping dist folder
   },
   target: 'web',
   module: {
@@ -23,7 +19,6 @@ export default {
           loader: 'babel-loader',
           options: {
             cacheDirectory: true,
-            presets: ['@babel/preset-env', '@babel/preset-react'],
           },
         },
       },
@@ -31,13 +26,6 @@ export default {
   },
   resolve: {
     alias: webpackAliases,
-    modules: [path.resolve(__dirname, 'src'), 'node_modules'],
-    extensions: ['.js', '.jsx'],
+    extensions: ['.js', '.jsx', '.json'],
   },
-  externals: isProd
-    ? {
-        react: 'React',
-        'react-dom': 'ReactDOM',
-      }
-    : {},
 };

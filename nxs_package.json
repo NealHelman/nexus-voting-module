@@ -1,17 +1,13 @@
 {
-  "name": "nexus-voting-module",
-  "displayName": "Nexus Voting",
-  "version": "0.1.1",
-  "targetWalletVersion": "3.1.5",
-  "description": "On-chain community voting system.",
+  "name": "_dev_nexus-voting-module",
+  "displayName": "Nexus Community On-Chain Voting Module",
+  "version": "0.1.0",
+  "targetWalletVersion": "3.2.0",
+  "description": "Nexus Community On-Chain Voting module for Nexus Interface",
   "type": "app",
   "entry": "dist/index.html",
-  "icon": "dist/react.svg"
-  "files": [
-    "dist/index.html",
-    "dist/app.js",
-    "dist/react.svg"
-  ],
+  "icon": "dist/react.svg",
+  "files": ["dist/index.html", "dist/react.svg", "dist/js/app.js"],
   "author": {
     "name": "Neal Helman",
     "email": "neal.helman@nexus.io"
