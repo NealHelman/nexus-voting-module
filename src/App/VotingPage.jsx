@@ -5,23 +5,22 @@ import { Link } from 'react-router-dom';
 import { decompressFromUTF16 } from 'lz-string';
 import { getVotingConfig, getWalletUserInfo } from '../utils/env';
 import nexusVotingService from '../services/nexusVotingService';
+import AdminPage from './AdminPage';
 
 const BACKEND_BASE = 'http://65.20.79.65:4006';
+const React = NEXUS.libraries.React;
 
-export default function VotingPage() {
+function VotingPageComponent() {
   const {
-    libraries: { React },
-    components: { Button, Panel, Dropdown },
+    components: { Button, Panel, Dropdown, FieldSet },
     utilities: { apiCall, confirm, showErrorDialog },
   } = NEXUS;
   
   const [filter, setFilter] = React.useState('active');
   const [sortOrder, setSortOrder] = React.useState('newest');
   const dispatch = useDispatch();
-  const [username, setUsername] = React.useState(null);
   const [genesis, setGenesis] = React.useState(null);
   const [canAccessAdmin, setCanAccessAdmin] = React.useState(false);
-  const [userGenesis, setUserGenesis] = React.useState(null);
   const [subscribed, setSubscribed] = React.useState(false);
   const [userTrust, setUserTrust] = React.useState(0);
   const [weightedVoteCounts, setWeightedVoteCounts] = React.useState({});
@@ -30,34 +29,33 @@ export default function VotingPage() {
   const [minTrust, setMinTrust] = React.useState(null);
   
   React.useEffect(() => {
-  // ✅ 1. Handle initial wallet load
-    NEXUS.utilities.onceInitialize((initialData) => {
-      if (initialData.userStatus) {
-        setUsername(initialData.userStatus.username);
-        setGenesis(initialData.userStatus.genesis);
-      }
-    });
-
-    // ✅ 2. Keep in sync with future login/logout events
-    NEXUS.utilities.onWalletDataUpdated((walletData) => {
-      if (walletData.userStatus) {
-        setUsername(walletData.userStatus.username);
-        setGenesis(walletData.userStatus.genesis);
-      } else {
-        setUsername(null);
-        setGenesis(null);
-      }
-    });
-
     const { ENV, VOTING_SIGCHAIN } = getVotingConfig();
     nexusVotingService.getProtectedValues().then(values => {
-    setMinTrust(values.MIN_TRUST);
-    console.log("minTrust: " + minTrust);
+    setMinTrust(values.MIN_TRUST_WEIGHT);
+    console.log("minTrust (from response):", values.MIN_TRUST_WEIGHT);
     });
   }, []);
   
   React.useEffect(() => {
-    if (!genesis) return;
+    window.myModuleDebug = { genesis, filter, sortOrder };
+  }, [genesis, filter, sortOrder]);
+
+  React.useEffect(() => {
+    const getGenesis = async () => {
+      try {
+        const data = await apiCall("finance/list/accounts/owner?where='results.name=default'", { foo: 'bar' });
+        console.log("data: ", data);
+        const genesis = parseInt(data?.owner || 0);
+        setGenesis(genesis);
+      } catch (e) {
+        showErrorDialog({
+          message: 'Failed to retrieve genesis',
+          note: e.message
+        });
+      }
+    };
+    getGenesis();
+
     const checkSubscriptionStatus = async () => {
       try {
         const { data } = await proxyRequest(
@@ -71,12 +69,12 @@ export default function VotingPage() {
     };
 
     const checkTrust = async () => {
-      if (!username) return;
       try {
-        const data = await apiCall('finance/get/account', { name: `${username}:trust` });
+        const data = await apiCall('finance/list/trust/trust', { foo: 'bar' });
+        console.log('data (from checkTrust): ' + data);
         const trust = parseInt(data?.trust || 0);
         setUserTrust(trust);
-        if (trust >= MIN_TRUST_WEIGHT) setCanAccessAdmin(true);
+        if (trust >= minTrust) setCanAccessAdmin(true);
       } catch (e) {
         showErrorDialog({
           message: 'Failed to retrieve trust level',
@@ -88,9 +86,6 @@ export default function VotingPage() {
 
     checkSubscriptionStatus();
     checkTrust();
-    apiCall('sessions/status/local')
-      .then((res) => setUserGenesis(res?.genesis || null))
-      .catch(() => setUserGenesis(null));
   }, [dispatch]);
 
   const handleSubscriptionToggle = async () => {
@@ -149,72 +144,82 @@ export default function VotingPage() {
   }, []);
 
   return (
-    <Panel title="Nexus Community Voting" icon={{ url: 'react.svg', id: 'icon' }}>
-      <div style={{ display: 'flex', gap: '1rem', marginBottom: '1rem' }}>
-        <Dropdown label="Filter">
-          <select value={filter} onChange={e => setFilter(e.target.value)}>
-            <option value="all">All</option>
-            <option value="active">Active</option>
-            <option value="closed">Closed</option>
-          </select>
-        </Dropdown>
-        <Dropdown label="Sort">
-          <select value={sortOrder} onChange={e => setSortOrder(e.target.value)}>
-            <option value="newest">Newest First</option>
-            <option value="oldest">Oldest First</option>
-          </select>
-        </Dropdown>
-      </div>
-      <Button onClick={handleSubscriptionToggle}>
-        {subscribed ? 'Unsubscribe from Announcements' : 'Subscribe to Announcements'}
-      </Button>
-      {canAccessAdmin && <p><Link to="/admin">Go to Admin Panel</Link></p>}
-      {loading ? <p>Loading...</p> : (() => {
-        const filteredVotes = voteList
-          .filter(vote => vote.min_trust === undefined || userTrust >= vote.min_trust)
-          .filter(vote => {
-            const now = Date.now() / 1000;
-            if (filter === 'active') return !vote.deadline || vote.deadline > now;
-            if (filter === 'closed') return vote.deadline && vote.deadline <= now;
-            return true;
-          })
-          .sort((a, b) => {
-            return sortOrder === 'newest'
-              ? b.created_at - a.created_at
-              : a.created_at - b.created_at;
-          });
+    <Panel title="Nexus Community On-Chain Voting - Issue Display" icon={{ url: 'react.svg', id: 'icon' }}>
+      <FieldSet style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1rem' }}>
+        <div style={{ display: 'flex', gap: '1rem', marginBottom: '1rem', marginTop: '1rem' }}>
+          <label htmlFor="filterSelect" style={{ marginBottom: '0.25rem' }}>Filter Voting Issues</label>
+          <Dropdown label="Filter">
+            <select value={filter} onChange={e => setFilter(e.target.value)}>
+              <option value="all">All</option>
+              <option value="active">Active</option>
+              <option value="closed">Closed</option>
+            </select>
+          </Dropdown>
+          <label htmlFor="sortSelect" style={{ marginBottom: '0.25rem' }}>Sort Voting Issues</label>
+          <Dropdown label="Sort">
+            <select value={sortOrder} onChange={e => setSortOrder(e.target.value)}>
+              <option value="newest">Newest First</option>
+              <option value="oldest">Oldest First</option>
+            </select>
+          </Dropdown>
+        </div>
+        <div style={{ display: 'flex', gap: '1rem', marginBottom: '1rem', marginTop: '1rem' }}>
+          <Button onClick={handleSubscriptionToggle}>
+            {subscribed ? 'Unsubscribe from Announcements' : 'Subscribe to Announcements'}
+          </Button>
+          {canAccessAdmin && <Button><Link to="/admin" style={{ textDecoration: 'none', color: 'inherit' }}>Enter a New Issue to Vote On</Link></Button>}
+        </div>
+      </FieldSet>
+      <div style={{ display: 'flex', justifyContent: 'center', gap: '1rem', marginBottom: '1rem', marginTop: '1rem' }}>
+        {loading ? <p>Loading...</p> : (() => {
+          const filteredVotes = voteList
+            .filter(vote => vote.min_trust === undefined || userTrust >= vote.min_trust)
+            .filter(vote => {
+              const now = Date.now() / 1000;
+              if (filter === 'active') return !vote.deadline || vote.deadline > now;
+              if (filter === 'closed') return vote.deadline && vote.deadline <= now;
+              return true;
+            })
+            .sort((a, b) => {
+              return sortOrder === 'newest'
+                ? b.created_at - a.created_at
+                : a.created_at - b.created_at;
+            });
 
-        if (filteredVotes.length === 0) {
-          return <p>No voting issues to display for this filter.</p>;
-        }
+          if (filteredVotes.length === 0) {
+            return <p>No voting issues to display for this filter.</p>;
+          }
 
-        return (
-          <ul>
-            {filteredVotes.map((vote) => (
-              <li key={vote.id}>
-                <Link to={`/issue/${vote.id}`}>{vote.title}</Link>
-                {vote.creator_genesis && vote.creator_genesis === genesis && (
-                  <div><Link to={`/admin?edit=${vote.id}`}>(edit)</Link></div>
-                )}
-                {vote.optionAccounts && (
-                  <ul style={{ fontSize: '0.9rem' }}>
-                    {vote.optionAccounts.map((opt, idx) => {
-                      const label = vote.option_labels?.[idx] || `Option ${idx + 1}`;
-                      const weightedCount = weightedVoteCounts?.[vote.slug]?.[opt] ?? '...';
+          return (
+            <ul>
+              {filteredVotes.map((vote) => (
+                <li key={vote.id}>
+                  <Link to={`/issue/${vote.id}`}>{vote.title}</Link>
+                  {vote.creator_genesis && vote.creator_genesis === genesis && (
+                    <div><Link to={`/admin?edit=${vote.id}`}>(edit)</Link></div>
+                  )}
+                  {vote.optionAccounts && (
+                    <ul style={{ fontSize: '0.9rem' }}>
+                      {vote.optionAccounts.map((opt, idx) => {
+                        const label = vote.option_labels?.[idx] || `Option ${idx + 1}`;
+                        const weightedCount = weightedVoteCounts?.[vote.slug]?.[opt] ?? '...';
 
-                      return (
-                        <li key={opt}>
-                          <strong>{label}</strong>: {weightedCount} weighted NXS
-                        </li>
-                      );
-                    })}
-                  </ul>
-                )}
-              </li>
-            ))}
-          </ul>
-        );
-      })()}
+                        return (
+                          <li key={opt}>
+                            <strong>{label}</strong>: {weightedCount} weighted NXS
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  )}
+                </li>
+              ))}
+            </ul>
+          );
+        })()}
+        </div>
     </Panel>
   );
 }
+
+export default VotingPageComponent;

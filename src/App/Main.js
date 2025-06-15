@@ -1,4 +1,8 @@
 import styled from '@emotion/styled';
+import { HashRouter, Routes, Route } from 'react-router-dom';
+import VotingPage from './VotingPage';
+import AdminPage from './AdminPage';
+console.log('AdminPage import:', AdminPage)
 import { useSelector, useDispatch } from 'react-redux';
 import {
   Panel,
@@ -19,8 +23,13 @@ import {
   updateInput,
 } from 'actions/actionCreators';
 
-import VotingPage from './VotingPage';
-
 export default function Main() {
-  return <VotingPage />;
+  return (
+    <HashRouter>
+      <Routes>
+        <Route path="/" element={<VotingPage />} />
+        <Route path="/admin" element={<AdminPage />} />
+      </Routes>
+    </HashRouter>
+  );
 }

@@ -1,64 +1,77 @@
-// --- AdminPage.jsx ---
-const {
-  libraries: { React, useState, useEffect },
-  components: {
-    TextField, TextArea, Button, Dropdown, Panel, Tooltip,
-  },
-  utilities: {
-    apiCall, send, showInfoDialog, showErrorDialog, showSuccessDialog,
-  },
-} = NEXUS;
-
-import { compressToUTF16 } from 'lz-string';
+// --- AdminPage.jsx ---  
+import { compressToUTF16, decompressFromUTF16 } from 'lz-string';
 import nexusVotingService from '../services/nexusVotingService';
-import { MIN_TRUST_WEIGHT } from '../constants';
 import axios from 'axios';
+import { Link } from 'react-router-dom';
 import { proxyRequest } from 'nexus-module';
 import { getVotingConfig, getWalletUserInfo } from '../utils/env';
 import { sha256FromFile } from '../utils/ipfs';
 
-const { ENV, VOTING_SIGCHAIN } = getVotingConfig();
-const { username, genesis } = getWalletUserInfo();
 const BACKEND_BASE = 'https://65.20.79.65:4006';
+const React = NEXUS.libraries.React;
 
-const AdminPage = () => {
-  const [title, setTitle] = useState('');
-  const [description, setDescription] = useState('');
-  const [optionLabels, setOptionLabels] = useState(['', '']);
-  const [minTrust, setMinTrust] = useState(MIN_TRUST_WEIGHT);
-  const [voteFinality, setVoteFinality] = useState('one_time');
-  const [organizerName, setOrganizerName] = useState('');
-  const [organizerTelegram, setOrganizerTelegram] = useState('');
-  const [deadline, setDeadline] = useState(null);
-  const [analysisLink, setAnalysisLink] = useState('');
-  const [summaryPro, setSummaryPro] = useState('');
-  const [summaryCon, setSummaryCon] = useState('');
-  const [possibleOutcomes, setPossibleOutcomes] = useState('');
-  const [message, setMessage] = useState('');
-  const [supportingDocs, setSupportingDocs] = useState([]);
-  const [byteCount, setByteCount] = useState(0);
-  const [createdBy, setCreatedBy] = useState('');
-  const [uploadProgress, setUploadProgress] = useState({});
-  const [createdAt, setCreatedAt] = useState(null);
-  const [creatorGenesis, setCreatorGenesis] = genesis;
+function AdminPageComponent() {
+  const {
+    components: { TextField, Button, Dropdown, FieldSet, Panel, Tooltip },
+    utilities: { apiCall, send, showInfoDialog, showErrorDialog, showSuccessDialog },
+  } = NEXUS;
+
+  const [title, setTitle] = React.useState('');
+  const [description, setDescription] = React.useState('');
+  const [optionLabels, setOptionLabels] = React.useState(['', '']);
+  const [minTrust, setMinTrust] = React.useState(null);
+  const [voteFinality, setVoteFinality] = React.useState('one_time');
+  const [organizerName, setOrganizerName] = React.useState('');
+  const [organizerTelegram, setOrganizerTelegram] = React.useState('');
+  const [deadline, setDeadline] = React.useState(null);
+  const [analysisLink, setAnalysisLink] = React.useState('');
+  const [summaryPro, setSummaryPro] = React.useState('');
+  const [summaryCon, setSummaryCon] = React.useState('');
+  const [possibleOutcomes, setPossibleOutcomes] = React.useState('');
+  const [message, setMessage] = React.useState('');
+  const [supportingDocs, setSupportingDocs] = React.useState([]);
+  const [byteCount, setByteCount] = React.useState(0);
+  const [createdBy, setCreatedBy] = React.useState('');
+  const [uploadProgress, setUploadProgress] = React.useState({});
+  const [createdAt, setCreatedAt] = React.useState(null);
+  const [creatorGenesis, setCreatorGenesis] = React.useState(null);
+  
+  const searchParams = new URLSearchParams(window.location.search);
+  const isEditing = searchParams.has('edit');
+  const editingId = searchParams.get('edit');
+  const panelTitle = isEditing
+    ? 'Nexus Community On-Chain Voting – Edit Voting Issue'
+    : 'Nexus Community On-Chain Voting – Enter New Voting Issue';
 
 
-  useEffect(() => {
-    // TODO: Replace population of "genesis" with const declared above
-    apiCall('sessions/status/local')
-      .then((res) => setCreatorGenesis(res?.genesis))
-      .catch(() => setCreatorGenesis(null));
+  React.useEffect(() => {
+    const { ENV, VOTING_SIGCHAIN } = getVotingConfig();
+    const getGenesis = async () => {
+      try {
+        const data = await apiCall("finance/list/accounts/owner?where='results.name=default'", { foo: 'bar' });
+        const genesis = parseInt(data?.owner || 0);
+        setCreatorGenesis(genesis);
+      } catch (e) {
+        showErrorDialog({
+          message: 'Failed to retrieve genesis',
+          note: e.message
+        });
+      }
+    };
+    getGenesis();
+    
+    const computeHash = async (file) => {
+      try {
+        const buffer = await file.arrayBuffer();
+        return sha256(new Uint8Array(buffer));
+      } catch (e) {
+        console.error("Hashing failed:", e);
+        return null;
+      }
+    };
 
-	const computeHash = async (file) => {
-	  const buffer = await file.arrayBuffer();
-	  const hashBuffer = await crypto.subtle.digest('SHA-256', buffer);
-	  return Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2, '0')).join('');
-	};
-
-	const searchParams = new URLSearchParams(window.location.search);
-    const editId = searchParams.get('edit');
-    if (editId) {
-      apiCall('assets/get/asset', { address: editId })
+    if (editingId) {
+      apiCall('assets/get/asset', { address: editingId })
         .then(res => {
           const config = JSON.parse(decompressFromUTF16(res.config));
           setTitle(config.title);
@@ -82,13 +95,7 @@ const AdminPage = () => {
     }
   }, []);
 
-  useEffect(() => {
-    getProtectedValues().then(values => {
-    setMinTrust(values.MIN_TRUST);
-    });
-  }, []);
-
-  useEffect(() => {
+  React.useEffect(() => {
     const computeByteCount = () => {
       const config = {
         title,
@@ -107,7 +114,6 @@ const AdminPage = () => {
         creator_genesis: creatorGenesis,
         created_at: createdAt || Math.floor(Date.now() / 1000),
         supporting_docs: supportingDocs,
-        creator_genesis: creatorGenesis
       };
       const compressed = compressToUTF16(JSON.stringify(config));
       const wrapped = JSON.stringify([{
@@ -127,40 +133,45 @@ const AdminPage = () => {
     const allowedTypes = ['text/markdown', 'text/plain', 'application/pdf'];
     const filtered = selectedFiles.filter(f => allowedTypes.includes(f.type));
     if (filtered.length === 0) return;
-  
+
     const updatedFiles = [];
     for (const file of filtered) {
       try {
+        const sha256 = await computeHash(file);
+        if (!sha256) {
+          setMessage(`Could not hash ${file.name}. Skipping.`);
+          continue;
+        }
+
         const formData = new FormData();
         formData.append('file', file);
-        const res = await axios.post('https://ipfs.infura.io:5001/api/v0/add', formData, {
-        onUploadProgress: (progressEvent) => {
-          const percent = Math.round((progressEvent.loaded * 100) / progressEvent.total);
-          setUploadProgress(prev => ({
-            ...prev,
-            [file.name]: percent
-          }));
-        }
-		const sha256 = await computeHash(file);
 
+        const res = await axios.post('https://ipfs.infura.io:5001/api/v0/add', formData, {
+          onUploadProgress: (progressEvent) => {
+            const percent = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+            setUploadProgress(prev => ({
+              ...prev,
+              [file.name]: percent
+            }));
+          }
         });
+
         if (!/^Qm[1-9A-HJ-NP-Za-km-z]{44}$/.test(res.data.Hash)) {
-            throw new Error('Invalid CID returned from IPFS');
+          throw new Error('Invalid CID returned from IPFS');
         }
+
         updatedFiles.push({ name: file.name, cid: res.data.Hash, sha256 });
+
       } catch (e) {
         console.error('Upload error:', file.name, e);
         setMessage(`Failed to upload ${file.name}`);
       }
     }
-  
+
     setSupportingDocs(prev => [...prev, ...updatedFiles]);
     setMessage(`${updatedFiles.length} file(s) uploaded to IPFS.`);
   };
  
-  const searchParams = new URLSearchParams(window.location.search);
-  const editingId = searchParams.get('edit');
-
   const createVote = async () => {
     if (!title.trim() || !description.trim() || optionLabels.length < 2 || optionLabels.some(l => !l.trim())) {
       setMessage('Please fill in the title, description, and at least two valid option labels.');
@@ -212,9 +223,7 @@ const AdminPage = () => {
         name: `${VOTING_SIGCHAIN}:default`
       });
 
-      const { address: senderAddress } = await apiCall('finance/get/account/address', {
-        name: 'default',
-      });
+      const { address: senderAddress } = await apiCall("finance/list/accounts/address where='results.name=default'", { foo: 'bar' });
 
       const amount = String(2 + optionLabels.length);
 
@@ -267,100 +276,137 @@ const AdminPage = () => {
   };
 
   return (
-    <Panel title="Create a New Voting Issue">
-      <TextField label="Title" value={title} onChange={(e) => setTitle(e.target.value)} />
-      <TextArea label="Description" value={description} onChange={(e) => setDescription(e.target.value)} />
-      <TextArea label="Summary - Pro Arguments" value={summaryPro} onChange={(e) => setSummaryPro(e.target.value)} />
-      <TextArea label="Summary - Con Arguments" value={summaryCon} onChange={(e) => setSummaryCon(e.target.value)} />
-      <TextArea label="Possible Outcomes (one per line)" value={possibleOutcomes} onChange={(e) => setPossibleOutcomes(e.target.value)} />
-      <TextField label="Created By (your Nexus username)" value={createdBy} onChange={(e) => setCreatedBy(e.target.value)} />
+    <Panel title={panelTitle} icon={{ url: 'react.svg', id: 'icon' }}>
+      <FieldSet legend="Basic Info">
+        <label htmlFor="titleTextField" style={{ marginBottom: '0.25rem' }}>Title</label>
+        <TextField label="Title" value={title} onChange={(e) => setTitle(e.target.value)} />
+        <label htmlFor="descriptionTextField" style={{ marginBottom: '0.25rem' }}>Description (multiline)</label>
+        <TextField multiline label="Description" value={description} onChange={(e) => setDescription(e.target.value)} />
+        <label htmlFor="summaryProArgumentsTextField" style={{ marginBottom: '0.25rem' }}>Summary - Pro Arguments (multiline)</label>
+        <TextField multiline label="Summary - Pro Arguments" value={summaryPro} onChange={(e) => setSummaryPro(e.target.value)} />
+        <label htmlFor="summaryConArgumentsTextField" style={{ marginBottom: '0.25rem' }}>Summary - Con Arguments (multiline)</label>
+        <TextField multiline label="Summary - Con Arguments" value={summaryCon} onChange={(e) => setSummaryCon(e.target.value)} />
+        <label htmlFor="possibleOutcomesTextField" style={{ marginBottom: '0.25rem' }}>Possible Outcomes (one per line)</label>
+        <TextField multiline label="Possible Outcomes (one per line)" value={possibleOutcomes} onChange={(e) => setPossibleOutcomes(e.target.value)} />
+      </FieldSet>
 
-      <TextField label="Organizer Name" value={organizerName} onChange={(e) => setOrganizerName(e.target.value)} />
-      <TextField label="Telegram Handle (optional)" value={organizerTelegram} onChange={(e) => setOrganizerTelegram(e.target.value)} />
-      <Dropdown
-        label="Vote Finality"
-        value={voteFinality}
-        options={[
-          { label: 'One-Time Vote', value: 'one_time' },
-          { label: 'Changeable Vote', value: 'changeable' },
-        ]}
-        onChange={(e) => setVoteFinality(e.target.value)}
-      />
-      <TextField label="Minimum Trust Weight" type="number" value={minTrust} onChange={(e) => setMinTrust(e.target.value)} />
-      <label>
-        Deadline (local time):
+      <FieldSet legend="Organizer Details">
+        <label htmlFor="organizerNameTextField" style={{ marginBottom: '0.25rem' }}>Organizer Name</label>
+        <TextField label="Organizer Name" value={organizerName} onChange={(e) => setOrganizerName(e.target.value)} />
+        <label htmlFor="telegramHandleTextField" style={{ marginBottom: '0.25rem' }}>Telegram Handle (optional)</label>
+        <TextField label="Telegram Handle (optional)" value={organizerTelegram} onChange={(e) => setOrganizerTelegram(e.target.value)} />
+      </FieldSet>
+      
+      <FieldSet legend="Voting Configuration">
+        <label htmlFor="voteFinality" style={{ marginBottom: '0.25rem', marginRight: '1rem' }}>Can People Change Their Vote?</label>
+        <Dropdown label="Vote Finality">
+            <select  value={voteFinality} onChange={e => setVoteFinality(e.target.value)}>
+              <option value="one_time">One-Time Vote</option>
+              <option value="changeable">Changeable Vote</option>
+            </select>
+        </Dropdown>
+        <p>
+          <label htmlFor="minTrustWeightTextField" style={{ marginBottom: '0.25rem' }}>Minimum Trust Required to Vote</label>
+          <TextField label="Minimum Trust Weight" type="number" value={minTrust} onChange={(e) => setMinTrust(e.target.value)} />
+        </p>
+        <label>
+          Voting Deadline (local time):
+          <input
+            type="datetime-local"
+            value={deadline ? new Date(deadline * 1000).toISOString().slice(0, 16) : ''}
+            onChange={(e) => {
+              const ts = Math.floor(new Date(e.target.value).getTime() / 1000);
+              setDeadline(ts);
+            }}
+            style={{ marginLeft: '1em', marginRight: '1rem' }}
+          />
+        </label>
+      </FieldSet>
+      
+      <p>
+        <label htmlFor="analysisCID" style={{ marginBottom: '0.25rem' }}>CID link to Analysis File on IPFS</label>
+        <TextField label="Analysis Link (e.g., cid://...)" value={analysisLink} onChange={(e) => setAnalysisLink(e.target.value)} />
+      </p>
+
+      <FieldSet legend="Options">
+        {optionLabels.map((label, idx) => (
+          <>
+          <label htmlFor={`option${idx + 1}`} style={{ marginBottom: '0.25rem' }}>{`Option ${idx + 1}`}</label>
+          <TextField
+            key={idx}
+            label={`Option ${idx + 1}`}
+            value={label}
+            onChange={(e) => {
+              const updated = [...optionLabels];
+              updated[idx] = e.target.value;
+              setOptionLabels(updated);
+            }}
+          />
+          </>
+        ))}
+        <Button onClick={() => setOptionLabels([...optionLabels, ''])}>
+          ➕ Add Another Option
+        </Button>
+      </FieldSet>
+      
+      <FieldSet legend="Supporting Documents">
+        <p>Upload .md, .txt, or .pdf files that explain the issue.</p>
         <input
-          type="datetime-local"
-          value={deadline ? new Date(deadline * 1000).toISOString().slice(0, 16) : ''}
-          onChange={(e) => {
-            const ts = Math.floor(new Date(e.target.value).getTime() / 1000);
-            setDeadline(ts);
-          }}
-          style={{ marginLeft: '1em' }}
+          type="file"
+          accept=".md,.txt,.pdf"
+          multiple
+          onChange={handleFileChange}
         />
-      </label>
-      <TextField label="Analysis Link (e.g., cid://...)" value={analysisLink} onChange={(e) => setAnalysisLink(e.target.value)} />
+        {Object.entries(uploadProgress).map(([filename, percent]) => (
+          <div key={filename} style={{ margin: '0.5em 0' }}>
+            <strong>{filename}</strong>
+            <progress value={percent} max="100" style={{ marginLeft: '1em' }} />
+            <span> {percent}%</span>
+          </div>
+        ))}
 
-      {optionLabels.map((label, idx) => (
-        <TextField
-          key={idx}
-          label={`Option ${idx + 1}`}
-          value={label}
-          onChange={(e) => {
-            const updated = [...optionLabels];
-            updated[idx] = e.target.value;
-            setOptionLabels(updated);
-          }}
-        />
-      ))}
-      <p><strong>Attach Supporting Documents:</strong> Upload .md, .txt, or .pdf files that explain the issue.</p>
-      <input
-        type="file"
-        accept=".md,.txt,.pdf"
-        multiple
-        onChange={handleFileChange}
-      />
-      {Object.entries(uploadProgress).map(([filename, percent]) => (
-        <div key={filename} style={{ margin: '0.5em 0' }}>
-          <strong>{filename}</strong>
-          <progress value={percent} max="100" style={{ marginLeft: '1em' }} />
-          <span> {percent}%</span>
-        </div>
-      ))}
+        {supportingDocs.length > 0 && (
+          <div>
+            <h4>Uploaded Supporting Documents:</h4>
+            <ul>
+              {supportingDocs.map((doc, i) => (
+                <li key={i}>
+                  {doc.name}
+                  <button type="button" onClick={async () => {
+                    const confirm = window.confirm(`Unpin ${doc.name} from Infura? This will make it less available on IPFS.`);
+                    if (!confirm) return;
+                    try {
+                      const res = await fetch(`${BACKEND_BASE}/unpin`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ cid: doc.cid })
+                      });
+                      const data = await res.json();
+                      if (data.success) setMessage(`Unpinned ${doc.name} successfully.`);
+                      else throw new Error(data.error || 'Unknown error');
+                    } catch (e) {
+                      console.error(e);
+                      setMessage(`Failed to unpin ${doc.name}: ${e.message}`);
+                    }
+                  }}>🗑 Unpin</button>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+        <p>{message}</p>
+      </FieldSet>
 
-      {supportingDocs.length > 0 && (
-        <div>
-          <h4>Uploaded Supporting Documents:</h4>
-          <ul>
-            {supportingDocs.map((doc, i) => (
-              <li key={i}>
-                {doc.name}
-                <button type="button" onClick={async () => {
-                  const confirm = window.confirm(`Unpin ${doc.name} from Infura? This will make it less available on IPFS.`);
-                  if (!confirm) return;
-                  try {
-                    const res = await fetch(`${BACKEND_BASE}/unpin`, {
-                      method: 'POST',
-                      headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({ cid: doc.cid })
-                    });
-                    const data = await res.json();
-                    if (data.success) setMessage(`Unpinned ${doc.name} successfully.`);
-                    else throw new Error(data.error || 'Unknown error');
-                  } catch (e) {
-                    console.error(e);
-                    setMessage(`Failed to unpin ${doc.name}: ${e.message}`);
-                  }
-                }}>🗑 Unpin</button>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-      <p>{message}</p>
-      <Button onClick={createVote} disabled={byteCount > 1024}>Submit Voting Issue</Button>
+      <div style={{ display: 'flex', justifyContent: 'center', gap: '1rem', marginBottom: '1rem', marginTop: '1rem' }}>
+        <Button onClick={createVote} disabled={byteCount > 1024}>Submit Voting Issue</Button>
+        <Button>
+          <Link to="/" style={{ textDecoration: 'none', color: 'inherit' }}>
+            Return to Voting Page
+          </Link>
+        </Button>
+      </div>
     </Panel>
   );
-};
+}
 
-export default AdminPage;
+export default AdminPageComponent;
