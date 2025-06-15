@@ -22,30 +22,31 @@ function VotingPageComponent() {
   const [genesis, setGenesis] = React.useState(null);
   const [canAccessAdmin, setCanAccessAdmin] = React.useState(false);
   const [subscribed, setSubscribed] = React.useState(false);
-  const [userTrust, setUserTrust] = React.useState(0);
+  const [userTrust, setUserTrust] = React.useState(null);
   const [weightedVoteCounts, setWeightedVoteCounts] = React.useState({});
   const [loading, setLoading] = React.useState(true);
   const [voteList, setVoteList] = React.useState([]);
   const [minTrust, setMinTrust] = React.useState(null);
+  const [environment, setEnvironment] = React.useState(null);
   
   React.useEffect(() => {
     const { ENV, VOTING_SIGCHAIN } = getVotingConfig();
     nexusVotingService.getProtectedValues().then(values => {
     setMinTrust(values.MIN_TRUST_WEIGHT);
-    console.log("minTrust (from response):", values.MIN_TRUST_WEIGHT);
+    setEnvironment(ENV);
     });
   }, []);
   
   React.useEffect(() => {
-    window.myModuleDebug = { genesis, filter, sortOrder };
-  }, [genesis, filter, sortOrder]);
-
+    window.myModuleDebug = { environment, genesis, filter, sortOrder, userTrust };
+  }, [environment, genesis, filter, sortOrder, userTrust]);
+  
   React.useEffect(() => {
     const getGenesis = async () => {
       try {
-        const data = await apiCall("finance/list/accounts/owner?where='results.name=default'", { foo: 'bar' });
-        console.log("data: ", data);
-        const genesis = parseInt(data?.owner || 0);
+        const genesis = await apiCall(
+          'finance/get/account/owner', 
+          { name: 'default' });
         setGenesis(genesis);
       } catch (e) {
         showErrorDialog({
@@ -70,11 +71,11 @@ function VotingPageComponent() {
 
     const checkTrust = async () => {
       try {
-        const data = await apiCall('finance/list/trust/trust', { foo: 'bar' });
-        console.log('data (from checkTrust): ' + data);
-        const trust = parseInt(data?.trust || 0);
-        setUserTrust(trust);
-        if (trust >= minTrust) setCanAccessAdmin(true);
+        const trustScore = await apiCall(
+          'finance/list/trust/trust', 
+          { name: 'trust' });
+        setUserTrust(trustScore?.[0]?.trust || 0);
+        if (userTrust >= minTrust) setCanAccessAdmin(true);
       } catch (e) {
         showErrorDialog({
           message: 'Failed to retrieve trust level',

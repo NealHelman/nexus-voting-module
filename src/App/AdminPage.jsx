@@ -35,6 +35,7 @@ function AdminPageComponent() {
   const [uploadProgress, setUploadProgress] = React.useState({});
   const [createdAt, setCreatedAt] = React.useState(null);
   const [creatorGenesis, setCreatorGenesis] = React.useState(null);
+  const [jsonCid, setJsonCid] = React.useState('');
   
   const searchParams = new URLSearchParams(window.location.search);
   const isEditing = searchParams.has('edit');
@@ -71,27 +72,44 @@ function AdminPageComponent() {
     };
 
     if (editingId) {
-      apiCall('assets/get/asset', { address: editingId })
-        .then(res => {
-          const config = JSON.parse(decompressFromUTF16(res.config));
-          setTitle(config.title);
-          setDescription(config.description);
-          setOptionLabels(config.option_labels);
-          setMinTrust(config.min_trust);
-          setVoteFinality(config.vote_finality);
-          setOrganizerName(config.organizer_name);
-          setOrganizerTelegram(config.organizer_telegram);
-          setDeadline(config.deadline);
-          setAnalysisLink(config.analysis_link);
-          setSummaryPro(config.summary_pro);
-          setSummaryCon(config.summary_con);
-          setPossibleOutcomes(config.possible_outcomes);
-          setSupportingDocs(config.supporting_docs || []);
-          setCreatedAt(config.created_at || Math.floor(Date.now() / 1000));
-          setCreatedBy(config.created_by || '');
-          setCreatorGenesis(config.creator_genesis || null);
-        })
-        .catch(err => console.error('Failed to prefill:', err));
+      try {
+        apiCall('assets/get/asset', { address: editingId })
+          .then(async res => {
+            const config = JSON.parse(decompressFromUTF16(res.config));
+
+            setTitle(config.title);
+            setDescription(config.description);
+            setOptionLabels(config.option_labels);
+            setMinTrust(config.min_trust);
+            setVoteFinality(config.vote_finality);
+            setOrganizerName(config.organizer_name);
+            setOrganizerTelegram(config.organizer_telegram);
+            setDeadline(config.deadline);
+            setAnalysisLink(config.analysis_link);
+            setSupportingDocs(config.supporting_docs || []);
+            setCreatorGenesis(config.creator_genesis || null);
+
+            // ✅ Load offloaded fields if IPFS CID is present
+            if (config.info_cid) {
+              try {
+                const ipfsResponse = await axios.get(`https://ipfs.io/ipfs/${config.info_cid}`);
+                const jsonInfo = ipfsResponse.data;
+
+                setSummaryPro(jsonInfo.summary_pro || '');
+                setSummaryCon(jsonInfo.summary_con || '');
+                setPossibleOutcomes(jsonInfo.possible_outcomes || '');
+              } catch (ipfsErr) {
+                console.error(`Failed to fetch IPFS content for CID ${config.info_cid}:`, ipfsErr);
+              }
+            }
+          })
+          .catch(err => console.error('Failed to prefill voting issue fields:', err));
+      } catch (e) {
+        showErrorDialog({
+          message: 'Failed to retrieve voting issue',
+          note: e.message
+        });
+      }
     }
   }, []);
 
@@ -107,9 +125,7 @@ function AdminPageComponent() {
         organizer_telegram: organizerTelegram,
         deadline: parseInt(deadline),
         analysis_link: analysisLink,
-        summary_pro: summaryPro,
-        summary_con: summaryCon,
-        possible_outcomes: possibleOutcomes,
+        issue_info_cid: `cid://${jsonCid}`,
         created_by: createdBy.trim() || 'unknown',
         creator_genesis: creatorGenesis,
         created_at: createdAt || Math.floor(Date.now() / 1000),
@@ -126,7 +142,7 @@ function AdminPageComponent() {
       setByteCount(size);
     };
     computeByteCount();
-  }, [title, description, optionLabels, minTrust, voteFinality, organizerName, organizerTelegram, deadline, analysisLink, summaryPro, summaryCon, possibleOutcomes]);
+  }, [title, description, optionLabels, minTrust, voteFinality, organizerName, organizerTelegram, deadline, analysisLink, summaryPro, summaryCon, possibleOutcomes, jsonCid]);
 
   const handleFileChange = async (e) => {
     const selectedFiles = Array.from(e.target.files);
@@ -178,6 +194,40 @@ function AdminPageComponent() {
       return;
     }
 
+    // Construct and upload issue_info.json to IPFS
+    const jsonContent = {
+      summary_pro: summaryPro,
+      summary_con: summaryCon,
+      possible_outcomes: possibleOutcomes,
+      version: 1,
+      created: new Date().toISOString()
+    };
+
+    const jsonBlob = new Blob([JSON.stringify(jsonContent)], { type: 'application/json' });
+    const formData = new FormData();
+    formData.append('file', jsonBlob, 'issue_info.json');
+
+    let jsonCid = null;
+    try {
+      const response = await axios.post('https://ipfs.infura.io:5001/api/v0/add', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data'
+        }
+      });
+      
+      if (!cid || !/^[A-Za-z0-9]+$/.test(cid)) {
+        showErrorDialog({ message: 'Invalid CID returned from IPFS' });
+        return;
+      }
+      jsonCid = response.data.Hash;
+    } catch (err) {
+      showErrorDialog({
+        message: 'Failed to upload JSON to IPFS',
+        note: err?.response?.data?.Message || err.message
+      });
+      return;
+    }
+
     const config = {
       title,
       description,
@@ -188,9 +238,7 @@ function AdminPageComponent() {
       organizer_telegram: organizerTelegram,
       deadline: parseInt(deadline),
       analysis_link: analysisLink,
-      summary_pro: summaryPro,
-      summary_con: summaryCon,
-      possible_outcomes: possibleOutcomes,
+      issue_info_cid: jsonCid ? `cid://${jsonCid}` : '',
       created_by: createdBy.trim() || 'unknown',
       creator_genesis: creatorGenesis,
       created_at: createdAt || Math.floor(Date.now() / 1000),
@@ -218,12 +266,28 @@ function AdminPageComponent() {
         showSuccessDialog({ message: 'Vote updated successfully.' });
         return;
       }
+      
+      try {
+        const recipientAddress = await apiCall(
+          'finance/get/account/address', 
+          { name: `${VOTING_SIGCHAIN}:default` });
+      } catch (e) {
+        showErrorDialog({
+          message: 'Failed to retrieve Voting Authority account address',
+          note: e.message
+        });
+      }
 
-      const { address: recipientAddress } = await apiCall('finance/get/account/address', {
-        name: `${VOTING_SIGCHAIN}:default`
-      });
-
-      const { address: senderAddress } = await apiCall("finance/list/accounts/address where='results.name=default'", { foo: 'bar' });
+      try {
+        const senderAddress = await apiCall(
+          'finance/get/account/address', 
+          { name: 'default' });
+      } catch (e) {
+        showErrorDialog({
+          message: 'Failed to retrieve sender account address',
+          note: e.message
+        });
+      }
 
       const amount = String(2 + optionLabels.length);
 
