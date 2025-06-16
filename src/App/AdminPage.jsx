@@ -24,7 +24,6 @@ function AdminPageComponent() {
   const [organizerName, setOrganizerName] = React.useState('');
   const [organizerTelegram, setOrganizerTelegram] = React.useState('');
   const [deadline, setDeadline] = React.useState(null);
-  const [analysisLink, setAnalysisLink] = React.useState('');
   const [summaryPro, setSummaryPro] = React.useState('');
   const [summaryCon, setSummaryCon] = React.useState('');
   const [possibleOutcomes, setPossibleOutcomes] = React.useState('');
@@ -36,6 +35,7 @@ function AdminPageComponent() {
   const [createdAt, setCreatedAt] = React.useState(null);
   const [creatorGenesis, setCreatorGenesis] = React.useState(null);
   const [jsonCid, setJsonCid] = React.useState('');
+  const [analysisCID, setAnalysisCID] = React.useState(null);
   
   const searchParams = new URLSearchParams(window.location.search);
   const isEditing = searchParams.has('edit');
@@ -85,7 +85,6 @@ function AdminPageComponent() {
             setOrganizerName(config.organizer_name);
             setOrganizerTelegram(config.organizer_telegram);
             setDeadline(config.deadline);
-            setAnalysisLink(config.analysis_link);
             setSupportingDocs(config.supporting_docs || []);
             setCreatorGenesis(config.creator_genesis || null);
 
@@ -124,7 +123,6 @@ function AdminPageComponent() {
         organizer_name: organizerName,
         organizer_telegram: organizerTelegram,
         deadline: parseInt(deadline),
-        analysis_link: analysisLink,
         issue_info_cid: `cid://${jsonCid}`,
         created_by: createdBy.trim() || 'unknown',
         creator_genesis: creatorGenesis,
@@ -142,7 +140,7 @@ function AdminPageComponent() {
       setByteCount(size);
     };
     computeByteCount();
-  }, [title, description, optionLabels, minTrust, voteFinality, organizerName, organizerTelegram, deadline, analysisLink, summaryPro, summaryCon, possibleOutcomes, jsonCid]);
+  }, [title, description, optionLabels, minTrust, voteFinality, organizerName, organizerTelegram, deadline, summaryPro, summaryCon, possibleOutcomes, jsonCid]);
 
   const handleFileChange = async (e) => {
     const selectedFiles = Array.from(e.target.files);
@@ -228,6 +226,11 @@ function AdminPageComponent() {
       return;
     }
 
+    const flaggedSupportingDocs = supportingDocs.map(doc => ({
+      ...doc,
+      is_analysis: doc.cid === analysisCID
+    }));
+
     const config = {
       title,
       description,
@@ -237,12 +240,11 @@ function AdminPageComponent() {
       organizer_name: organizerName,
       organizer_telegram: organizerTelegram,
       deadline: parseInt(deadline),
-      analysis_link: analysisLink,
       issue_info_cid: jsonCid ? `cid://${jsonCid}` : '',
       created_by: createdBy.trim() || 'unknown',
       creator_genesis: creatorGenesis,
       created_at: createdAt || Math.floor(Date.now() / 1000),
-      supporting_docs: supportingDocs
+      supporting_docs: flaggedSupportingDocs
     };
 
     const compressed = compressToUTF16(JSON.stringify(config));
@@ -320,10 +322,10 @@ function AdminPageComponent() {
           });
           if (Array.isArray(res) && res[0]?.txid) {
             await nexusVotingService.createVoteViaBackend(config);
-            showSuccessDialog({ message: 'Vote created and transfer confirmed!' });
+            if (result.success) showSuccess(`Submitted! TxID: ${result.txid}`);
             return;
           }
-        } catch (e) {}
+        } catch (e) {console.log('API call failed:', e)}
         await new Promise(resolve => setTimeout(resolve, pollIntervalMs));
       }
 
@@ -387,11 +389,6 @@ function AdminPageComponent() {
         </label>
       </FieldSet>
       
-      <p>
-        <label htmlFor="analysisCID" style={{ marginBottom: '0.25rem' }}>CID link to Analysis File on IPFS</label>
-        <TextField label="Analysis Link (e.g., cid://...)" value={analysisLink} onChange={(e) => setAnalysisLink(e.target.value)} />
-      </p>
-
       <FieldSet legend="Options">
         {optionLabels.map((label, idx) => (
           <>
@@ -414,7 +411,7 @@ function AdminPageComponent() {
       </FieldSet>
       
       <FieldSet legend="Supporting Documents">
-        <p>Upload .md, .txt, or .pdf files that explain the issue.</p>
+        <p>Attach a markdown, text, or PDF file to serve as the primary analysis document. You may also attach additional supporting documents.</p>
         <input
           type="file"
           accept=".md,.txt,.pdf"
@@ -434,8 +431,17 @@ function AdminPageComponent() {
             <h4>Uploaded Supporting Documents:</h4>
             <ul>
               {supportingDocs.map((doc, i) => (
-                <li key={i}>
-                  {doc.name}
+                <li key={doc.cid}>
+                  <strong>{doc.name}</strong>
+                  <label style={{ marginLeft: '1rem' }}>
+                    <input
+                      type="radio"
+                      name="analysis_file"
+                      checked={doc.cid === analysisCID}
+                      onChange={() => setAnalysisCID(doc.cid)}
+                    />
+                    Use as Analysis File
+                  </label>
                   <button type="button" onClick={async () => {
                     const confirm = window.confirm(`Unpin ${doc.name} from Infura? This will make it less available on IPFS.`);
                     if (!confirm) return;
