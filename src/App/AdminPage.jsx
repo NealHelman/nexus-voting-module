@@ -7,23 +7,23 @@ import { proxyRequest } from 'nexus-module';
 import { getVotingConfig, getWalletUserInfo } from '../utils/env';
 import { sha256FromFile } from '../utils/ipfs';
 
-const BACKEND_BASE = 'https://65.20.79.65:4006';
+const BACKEND_BASE = 'http://65.20.79.65:4006';
 const React = NEXUS.libraries.React;
 
 function AdminPageComponent() {
   const {
-    components: { TextField, Button, Dropdown, FieldSet, Panel, Tooltip },
+    components: { TextField, MultilineTextField, Button, Dropdown, FieldSet, Panel, Tooltip },
     utilities: { apiCall, send, showInfoDialog, showErrorDialog, showSuccessDialog },
   } = NEXUS;
 
   const [title, setTitle] = React.useState('');
   const [description, setDescription] = React.useState('');
   const [optionLabels, setOptionLabels] = React.useState(['', '']);
-  const [minTrust, setMinTrust] = React.useState(null);
+  const [minTrust, setMinTrust] = React.useState('');
   const [voteFinality, setVoteFinality] = React.useState('one_time');
   const [organizerName, setOrganizerName] = React.useState('');
   const [organizerTelegram, setOrganizerTelegram] = React.useState('');
-  const [deadline, setDeadline] = React.useState(null);
+  const [deadline, setDeadline] = React.useState('');
   const [summaryPro, setSummaryPro] = React.useState('');
   const [summaryCon, setSummaryCon] = React.useState('');
   const [possibleOutcomes, setPossibleOutcomes] = React.useState('');
@@ -32,10 +32,10 @@ function AdminPageComponent() {
   const [byteCount, setByteCount] = React.useState(0);
   const [createdBy, setCreatedBy] = React.useState('');
   const [uploadProgress, setUploadProgress] = React.useState({});
-  const [createdAt, setCreatedAt] = React.useState(null);
-  const [creatorGenesis, setCreatorGenesis] = React.useState(null);
+  const [createdAt, setCreatedAt] = React.useState('');
+  const [creatorGenesis, setCreatorGenesis] = React.useState('');
   const [jsonCid, setJsonCid] = React.useState('');
-  const [analysisCID, setAnalysisCID] = React.useState(null);
+  const [analysisCID, setAnalysisCID] = React.useState('');
   
   const searchParams = new URLSearchParams(window.location.search);
   const isEditing = searchParams.has('edit');
@@ -44,6 +44,13 @@ function AdminPageComponent() {
     ? 'Nexus Community On-Chain Voting – Edit Voting Issue'
     : 'Nexus Community On-Chain Voting – Enter New Voting Issue';
 
+
+  function formatDateLocal(ts) {
+    const date = new Date(ts * 1000);
+    const offset = date.getTimezoneOffset() * 60000;
+    const local = new Date(date.getTime() - offset);
+    return local.toISOString().slice(0, 16); // 'YYYY-MM-DDTHH:MM'
+  };
 
   React.useEffect(() => {
     const { ENV, VOTING_SIGCHAIN } = getVotingConfig();
@@ -61,16 +68,6 @@ function AdminPageComponent() {
     };
     getGenesis();
     
-    const computeHash = async (file) => {
-      try {
-        const buffer = await file.arrayBuffer();
-        return sha256(new Uint8Array(buffer));
-      } catch (e) {
-        console.error("Hashing failed:", e);
-        return null;
-      }
-    };
-
     if (editingId) {
       try {
         apiCall('assets/get/asset', { address: editingId })
@@ -149,41 +146,59 @@ function AdminPageComponent() {
     if (filtered.length === 0) return;
 
     const updatedFiles = [];
+
     for (const file of filtered) {
       try {
-        const sha256 = await computeHash(file);
-        if (!sha256) {
+        const hash = await sha256FromFile(file);
+        if (!hash) {
           setMessage(`Could not hash ${file.name}. Skipping.`);
           continue;
         }
 
-        const formData = new FormData();
-        formData.append('file', file);
-
-        const res = await axios.post('https://ipfs.infura.io:5001/api/v0/add', formData, {
-          onUploadProgress: (progressEvent) => {
-            const percent = Math.round((progressEvent.loaded * 100) / progressEvent.total);
-            setUploadProgress(prev => ({
-              ...prev,
-              [file.name]: percent
-            }));
-          }
+        const reader = new FileReader();
+        const base64 = await new Promise((resolve, reject) => {
+          reader.onload = () => resolve(reader.result.split(',')[1]); // strip "data:...base64,"
+          reader.onerror = () => reject('FileReader failed');
+          reader.readAsDataURL(file);
         });
 
-        if (!/^Qm[1-9A-HJ-NP-Za-km-z]{44}$/.test(res.data.Hash)) {
-          throw new Error('Invalid CID returned from IPFS');
+        setUploadProgress(prev => ({ ...prev, [file.name]: 0 }));
+        console.log("filename: ", file.name);
+        console.log("type: ", file.type);
+        console.log("base64: ", base64);
+
+        const response = await proxyRequest(`${BACKEND_BASE}/ipfs/upload`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          data: {
+            filename: file.name,
+            mimeType: file.type,
+            base64
+          }
+        });
+        
+        setUploadProgress(prev => ({ ...prev, [file.name]: 100 }));
+
+        if (!response || !response.success || !response.cid) {
+          throw new Error(`Invalid response from backend`);
         }
 
-        updatedFiles.push({ name: file.name, cid: res.data.Hash, sha256 });
+        updatedFiles.push({ name: file.name, cid: response.cid, sha256: hash });
+        console.log("response: ", { name: file.name, cid: response.cid, sha256: hash });
 
       } catch (e) {
-        console.error('Upload error:', file.name, e);
-        setMessage(`Failed to upload ${file.name}`);
+        console.error(`Failed to upload ${file.name}:`, e);
+        showErrorDialog({
+          message: `Upload failed for ${file.name}`,
+          note: e.message || 'Unknown error'
+        });
       }
     }
 
-    setSupportingDocs(prev => [...prev, ...updatedFiles]);
-    setMessage(`${updatedFiles.length} file(s) uploaded to IPFS.`);
+    if (updatedFiles.length > 0) {
+      setSupportingDocs(prev => [...prev, ...updatedFiles]);
+      setMessage(`${updatedFiles.length} file(s) uploaded to IPFS.`);
+    }
   };
  
   const createVote = async () => {
@@ -347,13 +362,13 @@ function AdminPageComponent() {
         <label htmlFor="titleTextField" style={{ marginBottom: '0.25rem' }}>Title</label>
         <TextField label="Title" value={title} onChange={(e) => setTitle(e.target.value)} />
         <label htmlFor="descriptionTextField" style={{ marginBottom: '0.25rem' }}>Description (multiline)</label>
-        <TextField multiline label="Description" value={description} onChange={(e) => setDescription(e.target.value)} />
+        <MultilineTextField label="Description" value={description} onChange={(e) => setDescription(e.target.value)} />
         <label htmlFor="summaryProArgumentsTextField" style={{ marginBottom: '0.25rem' }}>Summary - Pro Arguments (multiline)</label>
-        <TextField multiline label="Summary - Pro Arguments" value={summaryPro} onChange={(e) => setSummaryPro(e.target.value)} />
+        <MultilineTextField label="Summary - Pro Arguments" value={summaryPro} onChange={(e) => setSummaryPro(e.target.value)} />
         <label htmlFor="summaryConArgumentsTextField" style={{ marginBottom: '0.25rem' }}>Summary - Con Arguments (multiline)</label>
-        <TextField multiline label="Summary - Con Arguments" value={summaryCon} onChange={(e) => setSummaryCon(e.target.value)} />
+        <MultilineTextField label="Summary - Con Arguments" value={summaryCon} onChange={(e) => setSummaryCon(e.target.value)} />
         <label htmlFor="possibleOutcomesTextField" style={{ marginBottom: '0.25rem' }}>Possible Outcomes (one per line)</label>
-        <TextField multiline label="Possible Outcomes (one per line)" value={possibleOutcomes} onChange={(e) => setPossibleOutcomes(e.target.value)} />
+        <MultilineTextField label="Possible Outcomes (one per line)" value={possibleOutcomes} onChange={(e) => setPossibleOutcomes(e.target.value)} />
       </FieldSet>
 
       <FieldSet legend="Organizer Details">
@@ -371,17 +386,17 @@ function AdminPageComponent() {
               <option value="changeable">Changeable Vote</option>
             </select>
         </Dropdown>
-        <p>
+        <div style={{ marginBottom: '1rem' }}>
           <label htmlFor="minTrustWeightTextField" style={{ marginBottom: '0.25rem' }}>Minimum Trust Required to Vote</label>
           <TextField label="Minimum Trust Weight" type="number" value={minTrust} onChange={(e) => setMinTrust(e.target.value)} />
-        </p>
+        </div>
         <label>
           Voting Deadline (local time):
           <input
             type="datetime-local"
-            value={deadline ? new Date(deadline * 1000).toISOString().slice(0, 16) : ''}
+            value={deadline ? formatDateLocal(deadline) : ''}
             onChange={(e) => {
-              const ts = Math.floor(new Date(e.target.value).getTime() / 1000);
+              const ts = Math.floor(new Date(e.target.value).getTime() / 1000); // converts local to UTC
               setDeadline(ts);
             }}
             style={{ marginLeft: '1em', marginRight: '1rem' }}
@@ -391,7 +406,7 @@ function AdminPageComponent() {
       
       <FieldSet legend="Options">
         {optionLabels.map((label, idx) => (
-          <>
+          <React.Fragment key={idx}>
           <label htmlFor={`option${idx + 1}`} style={{ marginBottom: '0.25rem' }}>{`Option ${idx + 1}`}</label>
           <TextField
             key={idx}
@@ -403,7 +418,7 @@ function AdminPageComponent() {
               setOptionLabels(updated);
             }}
           />
-          </>
+          </React.Fragment>
         ))}
         <Button onClick={() => setOptionLabels([...optionLabels, ''])}>
           ➕ Add Another Option
@@ -443,8 +458,8 @@ function AdminPageComponent() {
                     Use as Analysis File
                   </label>
                   <button type="button" onClick={async () => {
-                    const confirm = window.confirm(`Unpin ${doc.name} from Infura? This will make it less available on IPFS.`);
-                    if (!confirm) return;
+                    const agreed = await confirm({ question:  `Unpin ${doc.name} from Infura? This will make it less available on IPFS.`});
+                    if (!agreed) return;
                     try {
                       const res = await fetch(`${BACKEND_BASE}/unpin`, {
                         method: 'POST',
@@ -459,6 +474,18 @@ function AdminPageComponent() {
                       setMessage(`Failed to unpin ${doc.name}: ${e.message}`);
                     }
                   }}>🗑 Unpin</button>
+                  {uploadProgress[doc.name] >= 0 && (
+                    <div style={{ width: '200px', background: '#eee', height: '6px', marginTop: '4px' }}>
+                      <div
+                        style={{
+                          width: `${uploadProgress[doc.name]}%`,
+                          background: '#4caf50',
+                          height: '100%',
+                          transition: 'width 0.3s ease'
+                        }}
+                      />
+                    </div>
+                  )}
                 </li>
               ))}
             </ul>
