@@ -5,9 +5,10 @@ const BACKEND_BASE = 'http://65.20.79.65:4006';
 const nexusVotingService = {
   getProtectedValues: async () => {
     const { data } = await proxyRequest(
-      `${BACKEND_BASE}/module/protected-values`,
+      `${BACKEND_BASE}/module-protected-values`,
       { method: 'GET' }
     );
+    console.log(JSON.stringify(data, null, 2));
     return data;
   },
   

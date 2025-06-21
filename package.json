@@ -26,6 +26,8 @@
     "dev": "cross-env NODE_ENV=development webpack serve --config webpack-dev.config.babel.js"
   },
   "dependencies": {
+    "axios": "^1.10.0",
+    "js-sha256": "^0.11.1",
     "lz-string": "^1.5.0",
     "nexus-module": "^1.1.11",
     "react-redux": "^8.0.2",

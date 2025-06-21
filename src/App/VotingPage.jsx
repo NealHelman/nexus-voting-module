@@ -19,15 +19,15 @@ function VotingPageComponent() {
   const [filter, setFilter] = React.useState('active');
   const [sortOrder, setSortOrder] = React.useState('newest');
   const dispatch = useDispatch();
-  const [genesis, setGenesis] = React.useState(null);
+  const [genesis, setGenesis] = React.useState('');
   const [canAccessAdmin, setCanAccessAdmin] = React.useState(false);
   const [subscribed, setSubscribed] = React.useState(false);
-  const [userTrust, setUserTrust] = React.useState(null);
+  const [userTrust, setUserTrust] = React.useState('');
   const [weightedVoteCounts, setWeightedVoteCounts] = React.useState({});
   const [loading, setLoading] = React.useState(true);
   const [voteList, setVoteList] = React.useState([]);
-  const [minTrust, setMinTrust] = React.useState(null);
-  const [environment, setEnvironment] = React.useState(null);
+  const [minTrust, setMinTrust] = React.useState('');
+  const [environment, setEnvironment] = React.useState('');
   
   React.useEffect(() => {
     const { ENV, VOTING_SIGCHAIN } = getVotingConfig();
@@ -38,9 +38,9 @@ function VotingPageComponent() {
   }, []);
   
   React.useEffect(() => {
-    window.myModuleDebug = { environment, genesis, filter, sortOrder, userTrust };
-  }, [environment, genesis, filter, sortOrder, userTrust]);
-  
+    window.myModuleDebug = { environment, genesis, filter, sortOrder, userTrust, minTrust };
+  }, [environment, genesis, filter, sortOrder, userTrust, minTrust]);
+
   React.useEffect(() => {
     const getGenesis = async () => {
       try {
@@ -143,9 +143,9 @@ function VotingPageComponent() {
 
     loadVotes();
   }, []);
-
+  
   return (
-    <Panel title="Nexus Community On-Chain Voting - Issue Display" icon={{ url: 'react.svg', id: 'icon' }}>
+    <Panel title="Nexus Community On-Chain Voting - Issue Display" icon={{ url: 'voting.svg', id: 'icon' }}>
       <FieldSet style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1rem' }}>
         <div style={{ display: 'flex', gap: '1rem', marginBottom: '1rem', marginTop: '1rem' }}>
           <label htmlFor="filterSelect" style={{ marginBottom: '0.25rem' }}>Filter Voting Issues</label>

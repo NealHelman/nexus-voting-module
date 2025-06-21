@@ -357,7 +357,7 @@ function AdminPageComponent() {
   };
 
   return (
-    <Panel title={panelTitle} icon={{ url: 'react.svg', id: 'icon' }}>
+    <Panel title={panelTitle} icon={{ url: 'voting.svg', id: 'icon' }}>
       <FieldSet legend="Basic Info">
         <label htmlFor="titleTextField" style={{ marginBottom: '0.25rem' }}>Title</label>
         <TextField label="Title" value={title} onChange={(e) => setTitle(e.target.value)} />

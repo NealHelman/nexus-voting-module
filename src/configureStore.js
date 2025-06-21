@@ -1,5 +1,5 @@
-console.log("configureStore.js");
 import { createStore, compose, applyMiddleware } from 'redux';
+
 import createReducer from './reducers';
 import { storageMiddleware, stateMiddleware } from 'nexus-module';
 
