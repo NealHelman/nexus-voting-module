@@ -26,19 +26,21 @@ function VotingPageComponent() {
   const [weightedVoteCounts, setWeightedVoteCounts] = React.useState({});
   const [loading, setLoading] = React.useState(true);
   const [voteList, setVoteList] = React.useState([]);
-  const [minTrust, setMinTrust] = React.useState('');
+  const [minTrust, setMinTrust] = React.useState(0);
   const [environment, setEnvironment] = React.useState('');
   
   React.useEffect(() => {
     const { ENV, VOTING_SIGCHAIN } = getVotingConfig();
-    nexusVotingService.getProtectedValues().then(values => {
-    setMinTrust(values.MIN_TRUST_WEIGHT);
     setEnvironment(ENV);
+    nexusVotingService.getProtectedValues().then(({ data }) => {
+    setMinTrust(data.MIN_TRUST_WEIGHT);
     });
   }, []);
   
   React.useEffect(() => {
-    window.myModuleDebug = { environment, genesis, filter, sortOrder, userTrust, minTrust };
+    const debugValues = { environment, genesis, filter, sortOrder, userTrust, minTrust };
+    console.log('Updating window.myModuleDebug:', debugValues);
+    window.myModuleDebug = debugValues;
   }, [environment, genesis, filter, sortOrder, userTrust, minTrust]);
 
   React.useEffect(() => {
@@ -59,7 +61,7 @@ function VotingPageComponent() {
 
     const checkSubscriptionStatus = async () => {
       try {
-        const { data } = await proxyRequest(
+        const data = await proxyRequest(
           `${BACKEND_BASE}/subscription-status/${genesis}`,
           { method: 'GET' }
         );
