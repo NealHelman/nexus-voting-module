@@ -33,8 +33,8 @@ function AdminPageComponent() {
   const [uploadProgress, setUploadProgress] = React.useState({});
   const [createdAt, setCreatedAt] = React.useState('');
   const [creatorGenesis, setCreatorGenesis] = React.useState('');
-  const [jsonCid, setJsonCid] = React.useState('');
-  const [analysisCID, setAnalysisCID] = React.useState('');
+  const [jsonGuid, setJsonGuid] = React.useState('');
+  const [analysisGuid, setAnalysisGuid] = React.useState('');
   const [votingAuthoritySigchain, setVotingAuthoritySigchain] = React.useState('');
   const [namedAssetCost, setNamedAssetCost] = React.useState(0);
   const [namedAccountCost, setNamedAccountCost] = React.useState(0);
@@ -101,17 +101,17 @@ function AdminPageComponent() {
             setSupportingDocs(config.supporting_docs || []);
             setCreatorGenesis(config.creator_genesis || null);
 
-            // ✅ Load offloaded fields if IPFS CID is present
-            if (config.info_cid) {
+            // ✅ Load offloaded fields if IPFS GUID is present
+            if (config.info_guid) {
               try {
-                const ipfsResponse = await axios.get(`https://ipfs.io/ipfs/${config.info_cid}`);
+                const ipfsResponse = await axios.get(`https://ipfs.io/ipfs/${config.info_guid}`);
                 const jsonInfo = ipfsResponse.data;
 
                 setSummaryPro(jsonInfo.summary_pro || '');
                 setSummaryCon(jsonInfo.summary_con || '');
                 setPossibleOutcomes(jsonInfo.possible_outcomes || '');
               } catch (ipfsErr) {
-                console.error(`Failed to fetch IPFS content for CID ${config.info_cid}:`, ipfsErr);
+                console.error(`Failed to fetch IPFS content for GUID ${config.info_guid}:`, ipfsErr);
               }
             }
           })
@@ -136,7 +136,7 @@ function AdminPageComponent() {
         organizer_name: organizerName,
         organizer_telegram: organizerTelegram,
         deadline: parseInt(deadline),
-        issue_info_cid: `cid://${jsonCid}`,
+        issue_info_guid: `guid://${jsonGuid}`,
         created_by: createdBy.trim() || 'unknown',
         creator_genesis: creatorGenesis,
         created_at: createdAt || Math.floor(Date.now() / 1000),
@@ -153,7 +153,7 @@ function AdminPageComponent() {
       setByteCount(size);
     };
     computeByteCount();
-  }, [title, description, optionLabels, minTrust, voteFinality, organizerName, organizerTelegram, deadline, summaryPro, summaryCon, possibleOutcomes, jsonCid]);
+  }, [title, description, optionLabels, minTrust, voteFinality, organizerName, organizerTelegram, deadline, summaryPro, summaryCon, possibleOutcomes, jsonGuid]);
 
   const handleFileChange = async (e) => {
     const selectedFiles = Array.from(e.target.files);
@@ -199,12 +199,11 @@ function AdminPageComponent() {
         
         console.log("pre response: ", response);
 
-        if (!response?.data?.success || !response.data.cid) {
+        if (!response?.data?.success || !response.data.guid) {
           throw new Error(`Invalid response from backend`);
         }
 
-        updatedFiles.push({ name: file.name, cid: response.cid, sha256: hash });
-        console.log("post response: ", { name: file.name, cid: response.cid, sha256: hash });
+        updatedFiles.push({ name: file.name, guid: response.guid, sha256: hash });
 
       } catch (e) {
         console.error(`Failed to upload ${file.name}:`, e);
@@ -217,7 +216,7 @@ function AdminPageComponent() {
 
     if (updatedFiles.length > 0) {
       setSupportingDocs(prev => [...prev, ...updatedFiles]);
-      setMessage(`${updatedFiles.length} file(s) uploaded to IPFS.`);
+      setMessage(`${updatedFiles.length} file(s) uploaded to backend.`);
     }
   };
  
@@ -240,7 +239,7 @@ function AdminPageComponent() {
     const formData = new FormData();
     formData.append('file', jsonBlob, 'issue_info.json');
 
-    let jsonCid = null;
+    let jsonGuid = null;
     try {
       const response = await axios.post('https://ipfs.infura.io:5001/api/v0/add', formData, {
         headers: {
@@ -248,11 +247,11 @@ function AdminPageComponent() {
         }
       });
       
-      if (!cid || !/^[A-Za-z0-9]+$/.test(cid)) {
-        showErrorDialog({ message: 'Invalid CID returned from IPFS' });
+      if (!guid || !/^[A-Za-z0-9]+$/.test(guid)) {
+        showErrorDialog({ message: 'Invalid GUID returned from IPFS' });
         return;
       }
-      jsonCid = response.data.Hash;
+      jsonGuid = response.data.guid;
     } catch (err) {
       showErrorDialog({
         message: 'Failed to upload JSON to IPFS',
@@ -263,7 +262,7 @@ function AdminPageComponent() {
 
     const flaggedSupportingDocs = supportingDocs.map(doc => ({
       ...doc,
-      is_analysis: doc.cid === analysisCID
+      is_analysis: doc.guid === analysisGuid
     }));
 
     const config = {
@@ -275,7 +274,7 @@ function AdminPageComponent() {
       organizer_name: organizerName,
       organizer_telegram: organizerTelegram,
       deadline: parseInt(deadline),
-      issue_info_cid: jsonCid ? `cid://${jsonCid}` : '',
+      issue_info_guid: jsonGuid ? `guid://${jsonGuid}` : '',
       created_by: createdBy.trim() || 'unknown',
       creator_genesis: creatorGenesis,
       created_at: createdAt || Math.floor(Date.now() / 1000),
@@ -473,14 +472,14 @@ function AdminPageComponent() {
             <h4>Uploaded Supporting Documents:</h4>
             <ul>
               {supportingDocs.map((doc, i) => (
-                <li key={doc.cid}>
+                <li key={doc.guid}>
                   <strong>{doc.name}</strong>
                   <label style={{ marginLeft: '1rem', marginRight: '1rem' }}>
                     <input
                       type="radio"
                       name="analysis_file"
-                      checked={doc.cid === analysisCID}
-                      onChange={() => setAnalysisCID(doc.cid)}
+                      checked={doc.guid === analysisGuid}
+                      onChange={() => setAnalysisGuid(doc.guid)}
                     />
                     Use as Analysis File
                   </label>
@@ -491,7 +490,7 @@ function AdminPageComponent() {
                       const res = await fetch(`${BACKEND_BASE}/unpin`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ cid: doc.cid })
+                        body: JSON.stringify({ guid: doc.guid })
                       });
                       const data = await res.json();
                       if (data.success) setMessage(`Unpinned ${doc.name} successfully.`);
