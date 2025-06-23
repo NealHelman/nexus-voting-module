@@ -4,7 +4,6 @@ import nexusVotingService from '../services/nexusVotingService';
 import axios from 'axios';
 import { Link } from 'react-router-dom';
 import { proxyRequest } from 'nexus-module';
-import { getVotingConfig, getWalletUserInfo } from '../utils/env';
 import { sha256FromFile } from '../utils/ipfs';
 
 const BACKEND_BASE = 'http://65.20.79.65:4006';
@@ -36,6 +35,11 @@ function AdminPageComponent() {
   const [creatorGenesis, setCreatorGenesis] = React.useState('');
   const [jsonCid, setJsonCid] = React.useState('');
   const [analysisCID, setAnalysisCID] = React.useState('');
+  const [votingAuthoritySigchain, setVotingAuthoritySigchain] = React.useState('');
+  const [namedAssetCost, setNamedAssetCost] = React.useState(0);
+  const [namedAccountCost, setNamedAccountCost] = React.useState(0);
+  const [submissionCost, setSubmissionCost] = React.useState(0);
+
   
   const searchParams = new URLSearchParams(window.location.search);
   const isEditing = searchParams.has('edit');
@@ -53,7 +57,19 @@ function AdminPageComponent() {
   };
 
   React.useEffect(() => {
-    const { ENV, VOTING_SIGCHAIN } = getVotingConfig();
+    nexusVotingService.getProtectedValues().then(({ data }) => {
+      setMinTrust(data.MIN_TRUST_WEIGHT);
+      setVotingAuthoritySigchain(data.VOTING_AUTHORITY_SIGCHAIN);
+      setNamedAssetCost(data.NAMED_ASSET_COST);
+      setNamedAccountCost(data.NAMED_ACCOUNT_COST);
+    });
+  }, []);
+
+  React.useEffect(() => {
+    setSubmissionCost(namedAssetCost + (namedAccountCost * optionLabels.length));
+  }, [namedAssetCost, namedAccountCost, optionLabels.length]);
+
+  React.useEffect(() => {
     const getGenesis = async () => {
       try {
         const data = await apiCall("finance/list/accounts/owner?where='results.name=default'", { foo: 'bar' });
@@ -291,7 +307,7 @@ function AdminPageComponent() {
       try {
         const recipientAddress = await apiCall(
           'finance/get/account/address', 
-          { name: `${VOTING_SIGCHAIN}:default` });
+          { name: `${votingAuthoritySigchain}:default` });
       } catch (e) {
         showErrorDialog({
           message: 'Failed to retrieve Voting Authority account address',
@@ -310,7 +326,7 @@ function AdminPageComponent() {
         });
       }
 
-      const amount = String(2 + optionLabels.length);
+      const amount = String(submissionCost);
 
       await send({
         sendFrom: senderAddress,
@@ -424,9 +440,16 @@ function AdminPageComponent() {
           />
           </React.Fragment>
         ))}
-        <Button onClick={() => setOptionLabels([...optionLabels, ''])}>
-          ➕ Add Another Option
-        </Button>
+      <Button
+        onClick={() => {
+          const newOptionLabels = [...optionLabels, ''];
+          setOptionLabels(newOptionLabels);
+          setSubmissionCost(namedAssetCost + (namedAccountCost * optionLabels.length));
+
+        }}
+      >
+        ➕ Add Another Option
+      </Button>
       </FieldSet>
       
       <FieldSet legend="Supporting Documents">
@@ -498,6 +521,9 @@ function AdminPageComponent() {
         <p>{message}</p>
       </FieldSet>
 
+      <div style={{ display: 'flex', justifyContent: 'center' }}>
+        Submitting this vote will cost {submissionCost} NXS
+      </div>
       <div style={{ display: 'flex', justifyContent: 'center', gap: '1rem', marginBottom: '1rem', marginTop: '1rem' }}>
         <Button onClick={createVote} disabled={byteCount > 1024}>Submit Voting Issue</Button>
         <Button>

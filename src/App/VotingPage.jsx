@@ -3,7 +3,6 @@ import { useDispatch, useSelector } from 'react-redux';
 import { proxyRequest } from 'nexus-module';
 import { Link } from 'react-router-dom';
 import { decompressFromUTF16 } from 'lz-string';
-import { getVotingConfig, getWalletUserInfo } from '../utils/env';
 import nexusVotingService from '../services/nexusVotingService';
 import AdminPage from './AdminPage';
 
@@ -27,21 +26,20 @@ function VotingPageComponent() {
   const [loading, setLoading] = React.useState(true);
   const [voteList, setVoteList] = React.useState([]);
   const [minTrust, setMinTrust] = React.useState(0);
-  const [environment, setEnvironment] = React.useState('');
+  const [votingAuthoritySigchain, setVotingAuthoritySigchain] = React.useState('');
   
   React.useEffect(() => {
-    const { ENV, VOTING_SIGCHAIN } = getVotingConfig();
-    setEnvironment(ENV);
     nexusVotingService.getProtectedValues().then(({ data }) => {
     setMinTrust(data.MIN_TRUST_WEIGHT);
+    setVotingAuthoritySigchain(data.VOTING_AUTHORITY_SIGCHAIN);
     });
   }, []);
   
   React.useEffect(() => {
-    const debugValues = { environment, genesis, filter, sortOrder, userTrust, minTrust };
+    const debugValues = { genesis, filter, sortOrder, userTrust, minTrust, subscribed };
     console.log('Updating window.myModuleDebug:', debugValues);
     window.myModuleDebug = debugValues;
-  }, [environment, genesis, filter, sortOrder, userTrust, minTrust]);
+  }, [genesis, filter, sortOrder, userTrust, minTrust, subscribed]);
 
   React.useEffect(() => {
     const getGenesis = async () => {
