@@ -167,24 +167,28 @@ function AdminPageComponent() {
         console.log("type: ", file.type);
         console.log("base64: ", base64);
 
-        const response = await proxyRequest(`${BACKEND_BASE}/ipfs/upload`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          data: {
-            filename: file.name,
-            mimeType: file.type,
-            base64
+        const response = await proxyRequest(
+          `${BACKEND_BASE}/ipfs/upload`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            data: {
+              name: file.name,
+              mimeType: file.type,
+              base64
           }
         });
         
         setUploadProgress(prev => ({ ...prev, [file.name]: 100 }));
+        
+        console.log("pre response: ", response);
 
-        if (!response || !response.success || !response.cid) {
+        if (!response?.data?.success || !response.data.cid) {
           throw new Error(`Invalid response from backend`);
         }
 
         updatedFiles.push({ name: file.name, cid: response.cid, sha256: hash });
-        console.log("response: ", { name: file.name, cid: response.cid, sha256: hash });
+        console.log("post response: ", { name: file.name, cid: response.cid, sha256: hash });
 
       } catch (e) {
         console.error(`Failed to upload ${file.name}:`, e);
@@ -448,7 +452,7 @@ function AdminPageComponent() {
               {supportingDocs.map((doc, i) => (
                 <li key={doc.cid}>
                   <strong>{doc.name}</strong>
-                  <label style={{ marginLeft: '1rem' }}>
+                  <label style={{ marginLeft: '1rem', marginRight: '1rem' }}>
                     <input
                       type="radio"
                       name="analysis_file"
@@ -458,7 +462,7 @@ function AdminPageComponent() {
                     Use as Analysis File
                   </label>
                   <button type="button" onClick={async () => {
-                    const agreed = await confirm({ question:  `Unpin ${doc.name} from Infura? This will make it less available on IPFS.`});
+                    const agreed = await confirm({ question:  `Unpin ${doc.name} from Web3.Storage? This will make it less available on IPFS.`});
                     if (!agreed) return;
                     try {
                       const res = await fetch(`${BACKEND_BASE}/unpin`, {
