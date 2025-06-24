@@ -5,6 +5,7 @@ import axios from 'axios';
 import { Link } from 'react-router-dom';
 import { proxyRequest } from 'nexus-module';
 import { sha256FromFile } from '../utils/ipfs';
+import { v4 as uuidv4 } from 'uuid';
 
 const BACKEND_BASE = 'http://65.20.79.65:4006';
 const React = NEXUS.libraries.React;
@@ -12,7 +13,7 @@ const React = NEXUS.libraries.React;
 function AdminPageComponent() {
   const {
     components: { TextField, MultilineTextField, Button, Dropdown, FieldSet, Panel, Tooltip },
-    utilities: { apiCall, send, showInfoDialog, showErrorDialog, showSuccessDialog },
+    utilities: { apiCall, secureApiCall, showInfoDialog, showErrorDialog, showSuccessDialog },
   } = NEXUS;
 
   const [title, setTitle] = React.useState('');
@@ -36,6 +37,7 @@ function AdminPageComponent() {
   const [jsonGuid, setJsonGuid] = React.useState('');
   const [analysisGuid, setAnalysisGuid] = React.useState('');
   const [votingAuthoritySigchain, setVotingAuthoritySigchain] = React.useState('');
+  const [votingAuthorityAccount, setVotingAuthorityAccount] = React.useState('');
   const [namedAssetCost, setNamedAssetCost] = React.useState(0);
   const [namedAccountCost, setNamedAccountCost] = React.useState(0);
   const [submissionCost, setSubmissionCost] = React.useState(0);
@@ -47,7 +49,7 @@ function AdminPageComponent() {
   const panelTitle = isEditing
     ? 'Nexus Community On-Chain Voting – Edit Voting Issue'
     : 'Nexus Community On-Chain Voting – Enter New Voting Issue';
-
+  const uuid = uuidv4();
 
   function formatDateLocal(ts) {
     const date = new Date(ts * 1000);
@@ -58,8 +60,8 @@ function AdminPageComponent() {
 
   React.useEffect(() => {
     nexusVotingService.getProtectedValues().then(({ data }) => {
-      setMinTrust(data.MIN_TRUST_WEIGHT);
       setVotingAuthoritySigchain(data.VOTING_AUTHORITY_SIGCHAIN);
+      setVotingAuthorityAccount(data.VOTING_AUTHORITY_ACCOUNT);
       setNamedAssetCost(data.NAMED_ASSET_COST);
       setNamedAccountCost(data.NAMED_ACCOUNT_COST);
     });
@@ -125,36 +127,6 @@ function AdminPageComponent() {
     }
   }, []);
 
-  React.useEffect(() => {
-    const computeByteCount = () => {
-      const config = {
-        title,
-        description,
-        option_labels: optionLabels,
-        min_trust: parseInt(minTrust),
-        vote_finality: voteFinality,
-        organizer_name: organizerName,
-        organizer_telegram: organizerTelegram,
-        deadline: parseInt(deadline),
-        issue_info_guid: `guid://${jsonGuid}`,
-        created_by: createdBy.trim() || 'unknown',
-        creator_genesis: creatorGenesis,
-        created_at: createdAt || Math.floor(Date.now() / 1000),
-        supporting_docs: supportingDocs,
-      };
-      const compressed = compressToUTF16(JSON.stringify(config));
-      const wrapped = JSON.stringify([{
-        name: "config",
-        type: "string",
-        value: compressed,
-        mutable: true
-      }]);
-      const size = new Blob([wrapped]).size;
-      setByteCount(size);
-    };
-    computeByteCount();
-  }, [title, description, optionLabels, minTrust, voteFinality, organizerName, organizerTelegram, deadline, summaryPro, summaryCon, possibleOutcomes, jsonGuid]);
-
   const handleFileChange = async (e) => {
     const selectedFiles = Array.from(e.target.files);
     const allowedTypes = ['text/markdown', 'text/plain', 'application/pdf'];
@@ -197,8 +169,6 @@ function AdminPageComponent() {
         
         setUploadProgress(prev => ({ ...prev, [file.name]: 100 }));
         
-        console.log("pre response: ", response);
-
         if (!response?.data?.success || !response.data.guid) {
           throw new Error(`Invalid response from backend`);
         }
@@ -225,8 +195,10 @@ function AdminPageComponent() {
       setMessage('Please fill in the title, description, and at least two valid option labels.');
       return;
     }
+    
+    const safeTitle = title.toLowerCase().replace(/\W+/g, '-').substring(0, 32);
+    const assetName = `vote-${safeTitle}-${createdAt}-${uuid.slice(0, 8)}`
 
-    // Construct and upload issue_info.json to IPFS
     const jsonContent = {
       summary_pro: summaryPro,
       summary_con: summaryCon,
@@ -235,26 +207,27 @@ function AdminPageComponent() {
       created: new Date().toISOString()
     };
 
-    const jsonBlob = new Blob([JSON.stringify(jsonContent)], { type: 'application/json' });
-    const formData = new FormData();
-    formData.append('file', jsonBlob, 'issue_info.json');
-
     let jsonGuid = null;
     try {
-      const response = await axios.post('https://ipfs.infura.io:5001/api/v0/add', formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data'
+      const uploadRes = await proxyRequest(`${BACKEND_BASE}/ipfs/upload`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        data: {
+          name: 'issue_info.json',
+          mimeType: 'application/json',
+          base64: btoa(JSON.stringify(jsonContent))
         }
       });
-      
-      if (!guid || !/^[A-Za-z0-9]+$/.test(guid)) {
-        showErrorDialog({ message: 'Invalid GUID returned from IPFS' });
-        return;
+
+      if (!uploadRes?.data?.success || !uploadRes.data.guid) {
+        throw new Error(`Invalid response from backend`);
       }
-      jsonGuid = response.data.guid;
+
+      jsonGuid = uploadRes.data.guid;
+      setJsonGuid(jsonGuid);
     } catch (err) {
       showErrorDialog({
-        message: 'Failed to upload JSON to IPFS',
+        message: 'Failed to upload issue_info.json to backend',
         note: err?.response?.data?.Message || err.message
       });
       return;
@@ -274,7 +247,7 @@ function AdminPageComponent() {
       organizer_name: organizerName,
       organizer_telegram: organizerTelegram,
       deadline: parseInt(deadline),
-      issue_info_guid: jsonGuid ? `guid://${jsonGuid}` : '',
+      issue_info_guid: jsonGuid,
       created_by: createdBy.trim() || 'unknown',
       creator_genesis: creatorGenesis,
       created_at: createdAt || Math.floor(Date.now() / 1000),
@@ -282,14 +255,21 @@ function AdminPageComponent() {
     };
 
     const compressed = compressToUTF16(JSON.stringify(config));
-    const wrapped = JSON.stringify([{
-      name: "config",
-      type: "string",
-      value: compressed,
+    const assetConfig = [{
+      name: assetName,
+      type: 'asset',
+      format: 'JSON',
+      json: [{
+        name: 'config',
+        type: 'string',
+        value: compressed,
+        mutable: true
+      }],
       mutable: true
-    }]);
+    }];
 
-    const payloadSize = new Blob([wrapped]).size;
+
+    const payloadSize = new Blob([compressed]).size;
     setByteCount(payloadSize);
     if (payloadSize > 1024) {
       setMessage(`Data exceeds the 1KB asset storage limit (actual: ${payloadSize} bytes). Please shorten your input.`);
@@ -297,69 +277,57 @@ function AdminPageComponent() {
     }
 
     try {
+      const stringifiedAssetConfig = JSON.stringify(assetConfig);
       if (editingId) {
-        await nexusVotingService.updateVoteViaBackend({ ...config, id: editingId });
+        await nexusVotingService.updateVoteViaBackend({
+          assetConfig: stringifiedAssetConfig,
+          id: editingId
+        });
         showSuccessDialog({ message: 'Vote updated successfully.' });
         return;
       }
+
+      const senderAddress = await apiCall('finance/get/account/address', {
+        name: 'default'
+      });
       
+      let txidString = '';
       try {
-        const recipientAddress = await apiCall(
-          'finance/get/account/address', 
-          { name: `${votingAuthoritySigchain}:default` });
+        const response = await secureApiCall('finance/debit/account', {
+          from: senderAddress.address,
+          to: votingAuthorityAccount,
+          amount: submissionCost
+          }
+        );
+
+        const result = response.data ?? response; // fallback if not Axios
+        if (!result.success) {
+          showErrorDialog({ message: 'Failed sending voting issue creation fee' });
+        }
+        txidString = result.txid.toString();
+        showInfoDialog({ message: "Sending NXS and submitting voting issue config..." });
       } catch (e) {
         showErrorDialog({
-          message: 'Failed to retrieve Voting Authority account address',
+          message: 'Error during sending voting issue creation fee',
           note: e.message
         });
       }
 
-      try {
-        const senderAddress = await apiCall(
-          'finance/get/account/address', 
-          { name: 'default' });
-      } catch (e) {
-        showErrorDialog({
-          message: 'Failed to retrieve sender account address',
-          note: e.message
-        });
-      }
-
-      const amount = String(submissionCost);
-
-      await send({
-        sendFrom: senderAddress,
-        recipients: [
-          {
-            address: recipientAddress,
-            amount,
-            reference: 0,
-          },
-        ],
-        advancedOptions: true,
-      });
-
-      showInfoDialog({
-        message: 'Waiting for NXS transfer to be detected...'
-      });
-
-      const where = `results.contracts.OP=CREDIT AND results.contracts.to=${recipientAddress} AND results.contracts.from=${senderAddress} AND results.contracts.amount=${amount} AND results.confirmations>1`;
-      const maxWaitMs = 10 * 60 * 1000;
+      const maxWaitMs = 20 * 60 * 1000;
       const pollIntervalMs = 10000;
       const start = Date.now();
 
       while (Date.now() - start < maxWaitMs) {
-        try {
-          const res = await apiCall('ledger/list/transactions', {
-            limit: 1,
-            where
+        const res = await apiCall('ledger/get/transaction', { txid: txidString });
+        console.log("res: ", res);
+        if (res.contracts[0]?.claimed > 0) {
+          const result = await nexusVotingService.createVoteViaBackend(stringifiedAssetConfig);
+          if (result.success) showSuccessDialog({ 
+            message: 'Success!',
+            note: `TxID has been claimed! ${txidString}`
           });
-          if (Array.isArray(res) && res[0]?.txid) {
-            await nexusVotingService.createVoteViaBackend(config);
-            if (result.success) showSuccess(`Submitted! TxID: ${result.txid}`);
-            return;
-          }
-        } catch (e) {console.log('API call failed:', e)}
+          return;
+        }
         await new Promise(resolve => setTimeout(resolve, pollIntervalMs));
       }
 
@@ -370,7 +338,7 @@ function AdminPageComponent() {
     } catch (e) {
       showErrorDialog({
         message: 'Error during vote creation',
-        note: e.message,
+        note: e.message
       });
     }
   };
@@ -483,23 +451,6 @@ function AdminPageComponent() {
                     />
                     Use as Analysis File
                   </label>
-                  <button type="button" onClick={async () => {
-                    const agreed = await confirm({ question:  `Unpin ${doc.name} from Web3.Storage? This will make it less available on IPFS.`});
-                    if (!agreed) return;
-                    try {
-                      const res = await fetch(`${BACKEND_BASE}/unpin`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ guid: doc.guid })
-                      });
-                      const data = await res.json();
-                      if (data.success) setMessage(`Unpinned ${doc.name} successfully.`);
-                      else throw new Error(data.error || 'Unknown error');
-                    } catch (e) {
-                      console.error(e);
-                      setMessage(`Failed to unpin ${doc.name}: ${e.message}`);
-                    }
-                  }}>🗑 Unpin</button>
                   {uploadProgress[doc.name] >= 0 && (
                     <div style={{ width: '200px', background: '#eee', height: '6px', marginTop: '4px' }}>
                       <div
