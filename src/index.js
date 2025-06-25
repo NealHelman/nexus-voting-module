@@ -4,6 +4,7 @@ import { listenToWalletData } from 'nexus-module';
 
 import configureStore from './configureStore';
 import App from './App';
+import './Styles/styles.css';
 
 const store = configureStore();
 listenToWalletData(store);
