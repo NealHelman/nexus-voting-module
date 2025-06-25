@@ -19,7 +19,7 @@ function AdminPageComponent() {
   const [title, setTitle] = React.useState('');
   const [description, setDescription] = React.useState('');
   const [optionLabels, setOptionLabels] = React.useState(['', '']);
-  const [minTrust, setMinTrust] = React.useState('');
+  const [minTrust, setMinTrust] = React.useState('10000');
   const [voteFinality, setVoteFinality] = React.useState('one_time');
   const [organizerName, setOrganizerName] = React.useState('');
   const [organizerTelegram, setOrganizerTelegram] = React.useState('');
@@ -41,7 +41,7 @@ function AdminPageComponent() {
   const [namedAssetCost, setNamedAssetCost] = React.useState(0);
   const [namedAccountCost, setNamedAccountCost] = React.useState(0);
   const [submissionCost, setSubmissionCost] = React.useState(0);
-
+  const [isSubmitting, setIsSubmitting] = React.useState(false);
   
   const searchParams = new URLSearchParams(window.location.search);
   const isEditing = searchParams.has('edit');
@@ -57,6 +57,13 @@ function AdminPageComponent() {
     const local = new Date(date.getTime() - offset);
     return local.toISOString().slice(0, 16); // 'YYYY-MM-DDTHH:MM'
   };
+  
+  function calculateDefaultDeadline() {
+    const now = new Date();
+    const deadline = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+    deadline.setHours(23, 59, 0, 0); // Set to 23:59:00.000
+    return Math.floor(deadline.getTime() / 1000); // Convert to Unix timestamp
+  }
 
   React.useEffect(() => {
     nexusVotingService.getProtectedValues().then(({ data }) => {
@@ -68,7 +75,7 @@ function AdminPageComponent() {
   }, []);
 
   React.useEffect(() => {
-    setSubmissionCost(namedAssetCost + (namedAccountCost * optionLabels.length));
+    setSubmissionCost(namedAssetCost + ((namedAccountCost + .02) * optionLabels.length) + 1);
   }, [namedAssetCost, namedAccountCost, optionLabels.length]);
 
   React.useEffect(() => {
@@ -85,6 +92,8 @@ function AdminPageComponent() {
       }
     };
     getGenesis();
+    
+    setDeadline(calculateDefaultDeadline());
     
     if (editingId) {
       try {
@@ -191,6 +200,8 @@ function AdminPageComponent() {
   };
  
   const createVote = async () => {
+    setIsSubmitting(true);
+    setMessage('Please while the voting issue data is submmitted...');
     if (!title.trim() || !description.trim() || optionLabels.length < 2 || optionLabels.some(l => !l.trim())) {
       setMessage('Please fill in the title, description, and at least two valid option labels.');
       return;
@@ -302,10 +313,9 @@ function AdminPageComponent() {
 
         const result = response.data ?? response; // fallback if not Axios
         if (!result.success) {
-          showErrorDialog({ message: 'Failed sending voting issue creation fee' });
+          return;
         }
         txidString = result.txid.toString();
-        showInfoDialog({ message: "Sending NXS and submitting voting issue config..." });
       } catch (e) {
         showErrorDialog({
           message: 'Error during sending voting issue creation fee',
@@ -316,15 +326,28 @@ function AdminPageComponent() {
       const maxWaitMs = 20 * 60 * 1000;
       const pollIntervalMs = 10000;
       const start = Date.now();
+      
+      const optionAccounts = optionLabels.map((label, idx) => {
+        const optionSafe = label.toLowerCase().replace(/\W+/g, '-').substring(0, 20);
+        return {
+          name: `opt-${optionSafe}-${uuid.slice(0, 8)}`,
+          label: label.trim()
+        };
+      });
+      
+      const payload = {
+        assetConfig: assetConfig[0], // not stringified now
+        optionAccounts
+      };
 
       while (Date.now() - start < maxWaitMs) {
         const res = await apiCall('ledger/get/transaction', { txid: txidString });
         console.log("res: ", res);
         if (res.contracts[0]?.claimed > 0) {
-          const result = await nexusVotingService.createVoteViaBackend(stringifiedAssetConfig);
+          const result = await nexusVotingService.createVoteViaBackend(payload);
           if (result.success) showSuccessDialog({ 
             message: 'Success!',
-            note: `TxID has been claimed! ${txidString}`
+            note: 'Vote created...'
           });
           return;
         }
@@ -340,147 +363,168 @@ function AdminPageComponent() {
         message: 'Error during vote creation',
         note: e.message
       });
+    } finally {
+      setIsSubmitting(false);
+      setMessage('Submission complete!');
     }
   };
 
   return (
     <Panel title={panelTitle} icon={{ url: 'voting.svg', id: 'icon' }}>
-      <FieldSet legend="Basic Info">
-        <label htmlFor="titleTextField" style={{ marginBottom: '0.25rem' }}>Title</label>
-        <TextField label="Title" value={title} onChange={(e) => setTitle(e.target.value)} />
-        <label htmlFor="descriptionTextField" style={{ marginBottom: '0.25rem' }}>Description (multiline)</label>
-        <MultilineTextField label="Description" value={description} onChange={(e) => setDescription(e.target.value)} />
-        <label htmlFor="summaryProArgumentsTextField" style={{ marginBottom: '0.25rem' }}>Summary - Pro Arguments (multiline)</label>
-        <MultilineTextField label="Summary - Pro Arguments" value={summaryPro} onChange={(e) => setSummaryPro(e.target.value)} />
-        <label htmlFor="summaryConArgumentsTextField" style={{ marginBottom: '0.25rem' }}>Summary - Con Arguments (multiline)</label>
-        <MultilineTextField label="Summary - Con Arguments" value={summaryCon} onChange={(e) => setSummaryCon(e.target.value)} />
-        <label htmlFor="possibleOutcomesTextField" style={{ marginBottom: '0.25rem' }}>Possible Outcomes (one per line)</label>
-        <MultilineTextField label="Possible Outcomes (one per line)" value={possibleOutcomes} onChange={(e) => setPossibleOutcomes(e.target.value)} />
-      </FieldSet>
-
-      <FieldSet legend="Organizer Details">
-        <label htmlFor="organizerNameTextField" style={{ marginBottom: '0.25rem' }}>Organizer Name</label>
-        <TextField label="Organizer Name" value={organizerName} onChange={(e) => setOrganizerName(e.target.value)} />
-        <label htmlFor="telegramHandleTextField" style={{ marginBottom: '0.25rem' }}>Telegram Handle (optional)</label>
-        <TextField label="Telegram Handle (optional)" value={organizerTelegram} onChange={(e) => setOrganizerTelegram(e.target.value)} />
-      </FieldSet>
-      
-      <FieldSet legend="Voting Configuration">
-        <label htmlFor="voteFinality" style={{ marginBottom: '0.25rem', marginRight: '1rem' }}>Can People Change Their Vote?</label>
-        <Dropdown label="Vote Finality">
-            <select  value={voteFinality} onChange={e => setVoteFinality(e.target.value)}>
-              <option value="one_time">One-Time Vote</option>
-              <option value="changeable">Changeable Vote</option>
-            </select>
-        </Dropdown>
-        <div style={{ marginBottom: '1rem' }}>
-          <label htmlFor="minTrustWeightTextField" style={{ marginBottom: '0.25rem' }}>Minimum Trust Required to Vote</label>
-          <TextField label="Minimum Trust Weight" type="number" value={minTrust} onChange={(e) => setMinTrust(e.target.value)} />
-        </div>
-        <label>
-          Voting Deadline (local time):
-          <input
-            type="datetime-local"
-            value={deadline ? formatDateLocal(deadline) : ''}
-            onChange={(e) => {
-              const ts = Math.floor(new Date(e.target.value).getTime() / 1000); // converts local to UTC
-              setDeadline(ts);
-            }}
-            style={{ marginLeft: '1em', marginRight: '1rem' }}
-          />
-        </label>
-      </FieldSet>
-      
-      <FieldSet legend="Options">
-        {optionLabels.map((label, idx) => (
-          <React.Fragment key={idx}>
-          <label htmlFor={`option${idx + 1}`} style={{ marginBottom: '0.25rem' }}>{`Option ${idx + 1}`}</label>
-          <TextField
-            key={idx}
-            label={`Option ${idx + 1}`}
-            value={label}
-            onChange={(e) => {
-              const updated = [...optionLabels];
-              updated[idx] = e.target.value;
-              setOptionLabels(updated);
-            }}
-          />
-          </React.Fragment>
-        ))}
-      <Button
-        onClick={() => {
-          const newOptionLabels = [...optionLabels, ''];
-          setOptionLabels(newOptionLabels);
-          setSubmissionCost(namedAssetCost + (namedAccountCost * optionLabels.length));
-
-        }}
-      >
-        ➕ Add Another Option
-      </Button>
-      </FieldSet>
-      
-      <FieldSet legend="Supporting Documents">
-        <p>Attach a markdown, text, or PDF file to serve as the primary analysis document. You may also attach additional supporting documents.</p>
-        <input
-          type="file"
-          accept=".md,.txt,.pdf"
-          multiple
-          onChange={handleFileChange}
-        />
-        {Object.entries(uploadProgress).map(([filename, percent]) => (
-          <div key={filename} style={{ margin: '0.5em 0' }}>
-            <strong>{filename}</strong>
-            <progress value={percent} max="100" style={{ marginLeft: '1em' }} />
-            <span> {percent}%</span>
-          </div>
-        ))}
-
-        {supportingDocs.length > 0 && (
-          <div>
-            <h4>Uploaded Supporting Documents:</h4>
-            <ul>
-              {supportingDocs.map((doc, i) => (
-                <li key={doc.guid}>
-                  <strong>{doc.name}</strong>
-                  <label style={{ marginLeft: '1rem', marginRight: '1rem' }}>
-                    <input
-                      type="radio"
-                      name="analysis_file"
-                      checked={doc.guid === analysisGuid}
-                      onChange={() => setAnalysisGuid(doc.guid)}
-                    />
-                    Use as Analysis File
-                  </label>
-                  {uploadProgress[doc.name] >= 0 && (
-                    <div style={{ width: '200px', background: '#eee', height: '6px', marginTop: '4px' }}>
-                      <div
-                        style={{
-                          width: `${uploadProgress[doc.name]}%`,
-                          background: '#4caf50',
-                          height: '100%',
-                          transition: 'width 0.3s ease'
-                        }}
-                      />
-                    </div>
-                  )}
-                </li>
-              ))}
-            </ul>
+      <div style={{ opacity: isSubmitting ? 0.5 : 1, pointerEvents: isSubmitting ? 'none' : 'auto' }}>
+        {isSubmitting && (
+          <div style={{
+            position: 'fixed',
+            top: 0, left: 0,
+            width: '100vw',
+            height: '100vh',
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+            backgroundColor: 'rgba(255, 255, 255, 0.6)', // optional dim overlay
+            zIndex: 9999
+          }}>
+            <div className="spinner" />
           </div>
         )}
-        <p>{message}</p>
-      </FieldSet>
+        <FieldSet legend="Basic Info">
+          <label htmlFor="titleTextField" style={{ marginBottom: '0.25rem' }}>Title</label>
+          <TextField label="Title" value={title} onChange={(e) => setTitle(e.target.value)} />
+          <label htmlFor="descriptionTextField" style={{ marginBottom: '0.25rem' }}>Description (multiline)</label>
+          <MultilineTextField label="Description" value={description} onChange={(e) => setDescription(e.target.value)} />
+          <label htmlFor="summaryProArgumentsTextField" style={{ marginBottom: '0.25rem' }}>Summary - Pro Arguments (multiline)</label>
+          <MultilineTextField label="Summary - Pro Arguments" value={summaryPro} onChange={(e) => setSummaryPro(e.target.value)} />
+          <label htmlFor="summaryConArgumentsTextField" style={{ marginBottom: '0.25rem' }}>Summary - Con Arguments (multiline)</label>
+          <MultilineTextField label="Summary - Con Arguments" value={summaryCon} onChange={(e) => setSummaryCon(e.target.value)} />
+          <label htmlFor="possibleOutcomesTextField" style={{ marginBottom: '0.25rem' }}>Possible Outcomes (one per line)</label>
+          <MultilineTextField label="Possible Outcomes (one per line)" value={possibleOutcomes} onChange={(e) => setPossibleOutcomes(e.target.value)} />
+        </FieldSet>
 
-      <div style={{ display: 'flex', justifyContent: 'center' }}>
-        Submitting this vote will cost {submissionCost} NXS
-      </div>
-      <div style={{ display: 'flex', justifyContent: 'center', gap: '1rem', marginBottom: '1rem', marginTop: '1rem' }}>
-        <Button onClick={createVote} disabled={byteCount > 1024}>Submit Voting Issue</Button>
-        <Button>
-          <Link to="/" style={{ textDecoration: 'none', color: 'inherit' }}>
-            Return to Voting Page
-          </Link>
+        <FieldSet legend="Organizer Details">
+          <label htmlFor="organizerNameTextField" style={{ marginBottom: '0.25rem' }}>Organizer Name</label>
+          <TextField label="Organizer Name" value={organizerName} onChange={(e) => setOrganizerName(e.target.value)} />
+          <label htmlFor="telegramHandleTextField" style={{ marginBottom: '0.25rem' }}>Telegram Handle (optional)</label>
+          <TextField label="Telegram Handle (optional)" value={organizerTelegram} onChange={(e) => setOrganizerTelegram(e.target.value)} />
+        </FieldSet>
+        
+        <FieldSet legend="Voting Configuration">
+          <label htmlFor="voteFinality" style={{ marginBottom: '0.25rem', marginRight: '1rem' }}>Can People Change Their Vote?</label>
+          <Dropdown label="Vote Finality">
+              <select  value={voteFinality} onChange={e => setVoteFinality(e.target.value)}>
+                <option value="one_time">One-Time Vote</option>
+                <option value="changeable">Changeable Vote</option>
+              </select>
+          </Dropdown>
+          <div style={{ marginBottom: '1rem' }}>
+            <label htmlFor="minTrustWeightTextField" style={{ marginBottom: '0.25rem' }}>Minimum Trust Required to Vote</label>
+            <TextField label="Minimum Trust Weight" type="number" value={minTrust} onChange={(e) => setMinTrust(e.target.value)} />
+          </div>
+          <label>
+            Voting Deadline (local time):
+            <input
+              type="datetime-local"
+              value={deadline ? formatDateLocal(deadline) : ''}
+              onChange={(e) => {
+                const ts = Math.floor(new Date(e.target.value).getTime() / 1000); // converts local to UTC
+                setDeadline(ts);
+              }}
+              style={{ marginLeft: '1em', marginRight: '1rem' }}
+            />
+          </label>
+        </FieldSet>
+        
+        <FieldSet legend="Options">
+          {optionLabels.map((label, idx) => (
+            <React.Fragment key={idx}>
+            <label htmlFor={`option${idx + 1}`} style={{ marginBottom: '0.25rem' }}>{`Option ${idx + 1}`}</label>
+            <TextField
+              key={idx}
+              label={`Option ${idx + 1}`}
+              value={label}
+              onChange={(e) => {
+                const updated = [...optionLabels];
+                updated[idx] = e.target.value;
+                setOptionLabels(updated);
+              }}
+            />
+            </React.Fragment>
+          ))}
+        <Button
+          onClick={() => {
+            const newOptionLabels = [...optionLabels, ''];
+            setOptionLabels(newOptionLabels);
+            setSubmissionCost(namedAssetCost + ((namedAccountCost + .02) * optionLabels.length));
+
+          }}
+        >
+          ➕ Add Another Option
         </Button>
+        </FieldSet>
+        
+        <FieldSet legend="Supporting Documents">
+          <p>Attach a markdown, text, or PDF file to serve as the primary analysis document. You may also attach additional supporting documents.</p>
+          <input
+            type="file"
+            accept=".md,.txt,.pdf"
+            multiple
+            onChange={handleFileChange}
+          />
+          {Object.entries(uploadProgress).map(([filename, percent]) => (
+            <div key={filename} style={{ margin: '0.5em 0' }}>
+              <strong>{filename}</strong>
+              <progress value={percent} max="100" style={{ marginLeft: '1em' }} />
+              <span> {percent}%</span>
+            </div>
+          ))}
+
+          {supportingDocs.length > 0 && (
+            <div>
+              <h4>Uploaded Supporting Documents:</h4>
+              <ul>
+                {supportingDocs.map((doc, i) => (
+                  <li key={doc.guid}>
+                    <strong>{doc.name}</strong>
+                    <label style={{ marginLeft: '1rem', marginRight: '1rem' }}>
+                      <input
+                        type="radio"
+                        name="analysis_file"
+                        checked={doc.guid === analysisGuid}
+                        onChange={() => setAnalysisGuid(doc.guid)}
+                      />
+                      Use as Analysis File
+                    </label>
+                    {uploadProgress[doc.name] >= 0 && (
+                      <div style={{ width: '200px', background: '#eee', height: '6px', marginTop: '4px' }}>
+                        <div
+                          style={{
+                            width: `${uploadProgress[doc.name]}%`,
+                            background: '#4caf50',
+                            height: '100%',
+                            transition: 'width 0.3s ease'
+                          }}
+                        />
+                      </div>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </FieldSet>
+        <p>{message}</p>
+        <div style={{ display: 'flex', justifyContent: 'center' }}>
+          Submitting this vote will cost {submissionCost} NXS
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'center', gap: '1rem', marginBottom: '1rem', marginTop: '1rem' }}>
+          <Button onClick={createVote} disabled={byteCount > 1024 || isSubmitting}>
+            Submit Voting Issue
+          </Button>
+          <Button disabled={isSubmitting}>
+            <Link to="/" style={{ textDecoration: 'none', color: 'inherit' }}>
+              Return to Voting Page
+            </Link>
+          </Button>
+        </div>
       </div>
     </Panel>
   );
