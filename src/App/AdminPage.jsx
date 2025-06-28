@@ -12,7 +12,7 @@ const React = NEXUS.libraries.React;
 
 function AdminPageComponent() {
   const {
-    components: { TextField, MultilineTextField, Button, Dropdown, FieldSet, Panel, Tooltip },
+    components: { TextField, MultilineTextField, Button, Dropdown, FieldSet, Panel, Switch, Tooltip },
     utilities: { apiCall, secureApiCall, showInfoDialog, showErrorDialog, showSuccessDialog },
   } = NEXUS;
 
@@ -63,7 +63,11 @@ function AdminPageComponent() {
     const deadline = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
     deadline.setHours(23, 59, 0, 0); // Set to 23:59:00.000
     return Math.floor(deadline.getTime() / 1000); // Convert to Unix timestamp
-  }
+  };
+  
+  function sleep(time) {
+    return new Promise((resolve) => setTimeout(resolve, time));
+  };
 
   React.useEffect(() => {
     nexusVotingService.getProtectedValues().then(({ data }) => {
@@ -75,7 +79,7 @@ function AdminPageComponent() {
   }, []);
 
   React.useEffect(() => {
-    setSubmissionCost(namedAssetCost + ((namedAccountCost + .02) * optionLabels.length) + 1);
+    setSubmissionCost(namedAssetCost + (namedAccountCost * optionLabels.length));
   }, [namedAssetCost, namedAccountCost, optionLabels.length]);
 
   React.useEffect(() => {
@@ -182,7 +186,7 @@ function AdminPageComponent() {
           throw new Error(`Invalid response from backend`);
         }
 
-        updatedFiles.push({ name: file.name, guid: response.guid, sha256: hash });
+        updatedFiles.push({ name: file.name, guid: response.data.guid, sha256: hash });
 
       } catch (e) {
         console.error(`Failed to upload ${file.name}:`, e);
@@ -201,7 +205,7 @@ function AdminPageComponent() {
  
   const createVote = async () => {
     setIsSubmitting(true);
-    setMessage('Please while the voting issue data is submmitted...');
+    setMessage('Please while the voting issue data is submmitted...<br />It will take a bit of time, since several objects need to be written to the blockchain.');
     if (!title.trim() || !description.trim() || optionLabels.length < 2 || optionLabels.some(l => !l.trim())) {
       setMessage('Please fill in the title, description, and at least two valid option labels.');
       return;
@@ -266,7 +270,7 @@ function AdminPageComponent() {
     };
 
     const compressed = compressToUTF16(JSON.stringify(config));
-    const assetConfig = [{
+    const assetConfig = {
       name: assetName,
       type: 'asset',
       format: 'JSON',
@@ -277,7 +281,7 @@ function AdminPageComponent() {
         mutable: true
       }],
       mutable: true
-    }];
+    };
 
 
     const payloadSize = new Blob([compressed]).size;
@@ -288,7 +292,21 @@ function AdminPageComponent() {
     }
 
     try {
-      const stringifiedAssetConfig = JSON.stringify(assetConfig);
+      const optionAccounts = optionLabels.map((label, idx) => {
+        const optionSafe = label.toLowerCase().replace(/\W+/g, '-').substring(0, 20);
+        return {
+          name: `opt-${optionSafe}-${uuid.slice(0, 8)}`,
+          label: label.trim()
+        };
+      });
+
+      const payload = {
+        assetConfig,
+        optionAccounts
+      };
+      
+      console.log("payload: ", payload);
+    
       if (editingId) {
         await nexusVotingService.updateVoteViaBackend({
           assetConfig: stringifiedAssetConfig,
@@ -327,23 +345,11 @@ function AdminPageComponent() {
       const pollIntervalMs = 10000;
       const start = Date.now();
       
-      const optionAccounts = optionLabels.map((label, idx) => {
-        const optionSafe = label.toLowerCase().replace(/\W+/g, '-').substring(0, 20);
-        return {
-          name: `opt-${optionSafe}-${uuid.slice(0, 8)}`,
-          label: label.trim()
-        };
-      });
-      
-      const payload = {
-        assetConfig: assetConfig[0], // not stringified now
-        optionAccounts
-      };
-
       while (Date.now() - start < maxWaitMs) {
         const res = await apiCall('ledger/get/transaction', { txid: txidString });
         console.log("res: ", res);
         if (res.contracts[0]?.claimed > 0) {
+          await sleep(10000)
           const result = await nexusVotingService.createVoteViaBackend(payload);
           if (result.success) showSuccessDialog({ 
             message: 'Success!',
@@ -453,7 +459,7 @@ function AdminPageComponent() {
           onClick={() => {
             const newOptionLabels = [...optionLabels, ''];
             setOptionLabels(newOptionLabels);
-            setSubmissionCost(namedAssetCost + ((namedAccountCost + .02) * optionLabels.length));
+            setSubmissionCost(namedAssetCost + (namedAccountCost * optionLabels.length));
 
           }}
         >
@@ -481,37 +487,49 @@ function AdminPageComponent() {
             <div>
               <h4>Uploaded Supporting Documents:</h4>
               <ul>
-                {supportingDocs.map((doc, i) => (
-                  <li key={doc.guid}>
-                    <strong>{doc.name}</strong>
-                    <label style={{ marginLeft: '1rem', marginRight: '1rem' }}>
-                      <input
-                        type="radio"
-                        name="analysis_file"
-                        checked={doc.guid === analysisGuid}
-                        onChange={() => setAnalysisGuid(doc.guid)}
-                      />
-                      Use as Analysis File
-                    </label>
-                    {uploadProgress[doc.name] >= 0 && (
-                      <div style={{ width: '200px', background: '#eee', height: '6px', marginTop: '4px' }}>
-                        <div
-                          style={{
-                            width: `${uploadProgress[doc.name]}%`,
-                            background: '#4caf50',
-                            height: '100%',
-                            transition: 'width 0.3s ease'
+                {supportingDocs.map((doc, i) => {
+                  const isChecked = analysisGuid === doc.guid;
+                  console.log("Rendering doc", doc.name, "with guid", doc.guid, "| Checked:", isChecked);
+
+                  return (
+                    <li key={doc.guid}>
+                      <strong>{doc.name}</strong>
+                      <label style={{ marginLeft: '1rem', marginRight: '1rem' }}>
+                        <Switch
+                          name="analysis_file"
+                          checked={isChecked}
+                          onChange={() => {
+                            setAnalysisGuid(prev => {
+                              const newGuid = prev === doc.guid ? null : doc.guid;
+                              console.log('Switch toggled for', doc.name, '| Setting analysisGuid to:', newGuid);
+                              return newGuid;
+                            });
                           }}
                         />
-                      </div>
-                    )}
-                  </li>
-                ))}
+                        Use as Analysis File
+                      </label>
+                      {uploadProgress[doc.name] >= 0 && (
+                        <div style={{ width: '200px', background: '#eee', height: '6px', marginTop: '4px' }}>
+                          <div
+                            style={{
+                              width: `${uploadProgress[doc.name]}%`,
+                              background: '#4caf50',
+                              height: '100%',
+                              transition: 'width 0.3s ease'
+                            }}
+                          />
+                        </div>
+                      )}
+                    </li>
+                  );
+                })}
               </ul>
             </div>
           )}
         </FieldSet>
-        <p>{message}</p>
+        <div style={{ display: 'flex', justifyContent: 'center', textAlign: 'center' }}>
+          <p dangerouslySetInnerHTML={{ __html: message }} />
+        </div>
         <div style={{ display: 'flex', justifyContent: 'center' }}>
           Submitting this vote will cost {submissionCost} NXS
         </div>

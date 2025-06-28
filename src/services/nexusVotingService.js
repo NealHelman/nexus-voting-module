@@ -4,8 +4,9 @@ const BACKEND_BASE = 'http://65.20.79.65:4006';
 
 const nexusVotingService = {
   getProtectedValues: async () => {
-    const { data } = await proxyRequest(
-      `${BACKEND_BASE}/module-protected-values`,
+    const environment = process.env.NODE_ENV;
+    const data = await proxyRequest(
+      `${BACKEND_BASE}/module-protected-values/${environment}`,
       { method: 'GET' }
     );
     console.log(JSON.stringify(data, null, 2));
@@ -13,28 +14,40 @@ const nexusVotingService = {
   },
   
   createVoteViaBackend: async (issue) => {
-    const { data } = await proxyRequest(
+    console.log("issue: ", issue);
+    const response = await proxyRequest(
       `${BACKEND_BASE}/create-vote`,
       {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(issue),
-    });
-    if (!data.ok) throw new Error('Failed to contact VAS backend');
-    return await data;
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        data: issue
+      }
+    );
+
+    if (!response || !response.data?.success) {
+      throw new Error('Failed to contact VAS backend or backend returned failure');
+    }
+
+    console.log("response: ", response.data);
+    return response.data;
   },
 
   updateVoteViaBackend: async (issue) => {
-    const { data } = await proxyRequest(
+    const response = await proxyRequest(
       `${BACKEND_BASE}/update-vote`,
       {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(issue),
-    });
-    if (!data.ok) throw new Error('Failed to contact VAS backend for update');
-    return await data.json();
-  },
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        data: issue
+      }
+    );
+
+    if (!response || !response.success) {
+      throw new Error('Failed to contact VAS backend or backend returned failure');
+    }
+
+    return response;
+  }
 };
 
 export default nexusVotingService;
