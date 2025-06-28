@@ -85,8 +85,8 @@ function AdminPageComponent() {
   React.useEffect(() => {
     const getGenesis = async () => {
       try {
-        const data = await apiCall("finance/list/accounts/owner?where='results.name=default'", { foo: 'bar' });
-        const genesis = parseInt(data?.owner || 0);
+        const data = await apiCall("finance/get/account/owner", { name: 'default' });
+        const genesis = data?.owner || 0;
         setCreatorGenesis(genesis);
       } catch (e) {
         showErrorDialog({
@@ -96,6 +96,16 @@ function AdminPageComponent() {
       }
     };
     getGenesis();
+  }, []);
+    
+  React.useEffect(() => {
+    const debugValues = { creatorGenesis };
+    console.log('Updating window.myModuleDebug:', debugValues);
+    window.myModuleDebug = debugValues;
+  }, [creatorGenesis]);
+
+  React.useEffect(() => {
+    if (!creatorGenesis) return; // 🚨 wait for genesis to be set
     
     setDeadline(calculateDefaultDeadline());
     
@@ -138,8 +148,8 @@ function AdminPageComponent() {
         });
       }
     }
-  }, []);
-
+  }, [creatorGenesis]); // ✅ depend on creatorGenesis, not dispatch
+  
   const handleFileChange = async (e) => {
     const selectedFiles = Array.from(e.target.files);
     const allowedTypes = ['text/markdown', 'text/plain', 'application/pdf'];
@@ -202,7 +212,7 @@ function AdminPageComponent() {
       setMessage(`${updatedFiles.length} file(s) uploaded to backend.`);
     }
   };
- 
+
   const createVote = async () => {
     setIsSubmitting(true);
     setMessage('Please while the voting issue data is submmitted...<br />It will take a bit of time, since several objects need to be written to the blockchain.');
