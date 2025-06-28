@@ -19,34 +19,28 @@ function VotingPageComponent() {
   const [sortOrder, setSortOrder] = React.useState('newest');
   const dispatch = useDispatch();
   const [genesis, setGenesis] = React.useState('');
-  const [canAccessAdmin, setCanAccessAdmin] = React.useState(false);
-  const [subscribed, setSubscribed] = React.useState(false);
-  const [userTrust, setUserTrust] = React.useState('');
+  const [canAccessAdmin, setCanAccessAdmin] = React.useState(0);
+  const [subscribed, setSubscribed] = React.useState(0);
+  const [userTrust, setUserTrust] = React.useState(0);
   const [weightedVoteCounts, setWeightedVoteCounts] = React.useState({});
   const [loading, setLoading] = React.useState(true);
   const [voteList, setVoteList] = React.useState([]);
   const [minTrust, setMinTrust] = React.useState(0);
   const [votingAuthoritySigchain, setVotingAuthoritySigchain] = React.useState('');
+  const [votingAuthorityAccount, setVotingAuthorityAccount] = React.useState('');
   
   React.useEffect(() => {
     nexusVotingService.getProtectedValues().then(({ data }) => {
-    setMinTrust(data.MIN_TRUST_WEIGHT);
-    setVotingAuthoritySigchain(data.VOTING_AUTHORITY_SIGCHAIN);
+      setVotingAuthoritySigchain(data.VOTING_AUTHORITY_SIGCHAIN);
+      setVotingAuthorityAccount(data.VOTING_AUTHORITY_ACCOUNT);
     });
   }, []);
-  
-  React.useEffect(() => {
-    const debugValues = { genesis, filter, sortOrder, userTrust, minTrust, subscribed };
-    console.log('Updating window.myModuleDebug:', debugValues);
-    window.myModuleDebug = debugValues;
-  }, [genesis, filter, sortOrder, userTrust, minTrust, subscribed]);
 
   React.useEffect(() => {
     const getGenesis = async () => {
       try {
-        const genesis = await apiCall(
-          'finance/get/account/owner', 
-          { name: 'default' });
+        const data = await apiCall("finance/get/account/owner", { name: 'default' });
+        const genesis = data?.owner || '';
         setGenesis(genesis);
       } catch (e) {
         showErrorDialog({
@@ -56,14 +50,16 @@ function VotingPageComponent() {
       }
     };
     getGenesis();
+  }, []);
+    
+  React.useEffect(() => {
+    if (!genesis) return; // 🚨 wait for genesis to be set
 
     const checkSubscriptionStatus = async () => {
       try {
-        const data = await proxyRequest(
-          `${BACKEND_BASE}/subscription-status/${genesis}`,
-          { method: 'GET' }
-        );
-        setSubscribed(data.subscribed);
+        const response = await proxyRequest(`${BACKEND_BASE}/subscription-status/${genesis}`, { method: 'GET' });
+        console.log("response.data.subscribed: ", response.data.subscribed);
+        setSubscribed(response.data.subscribed);
       } catch (e) {
         console.error('Failed to check subscription status:', e);
       }
@@ -71,60 +67,58 @@ function VotingPageComponent() {
 
     const checkTrust = async () => {
       try {
-        const trustScore = await apiCall(
-          'finance/list/trust/trust', 
-          { name: 'trust' });
-        setUserTrust(trustScore?.[0]?.trust || 0);
-        if (userTrust >= minTrust) setCanAccessAdmin(true);
+        const trustScore = await apiCall('finance/list/trust/trust', { name: 'trust' });
+        const trust = trustScore?.[0]?.trust || 0;
+        setUserTrust(trust);
+        if (trust >= minTrust) setCanAccessAdmin(1);
       } catch (e) {
-        showErrorDialog({
-          message: 'Failed to retrieve trust level',
-          note: e.message
-        });
-        setCanAccessAdmin(false);
+        showErrorDialog({ message: 'Failed to retrieve trust level', note: e.message });
+        setCanAccessAdmin(0);
       }
     };
 
     checkSubscriptionStatus();
     checkTrust();
-  }, [dispatch]);
+  }, [genesis, minTrust]); // ✅ depend on genesis, not dispatch
 
   const handleSubscriptionToggle = async () => {
     const email = await window.getInput('Enter your email for voting issue announcements:');
     if (!email) return;
-    const agreed = await confirm({ question: "Please confirm your subscription change" });
-	if (!agreed) return;
-	const endpoint = subscribed ? '/unsubscribe' : '/subscribe';
-	try {
-	  const data = await proxyRequest(
-		`${BACKEND_BASE}${endpoint}`,
-		{
-		method: 'POST',
-		headers: { 'Content-Type': 'application/json' },
-		body: JSON.stringify({ email, genesis })
-	  });
-	  setSubscribed(!subscribed);
-	} catch (e) {
-	  console.error(`Failed to ${subscribed ? 'unsubscribe' : 'subscribe'}:`, e);
-	}
+    const agreed = await confirm({ question: 'Please confirm your subscription change' });
+    if (!agreed) return;
+    const endpoint = subscribed ? '/unsubscribe' : '/subscribe';
+    try {
+      const data = await proxyRequest(`${BACKEND_BASE}${endpoint}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, genesis })
+      });
+      setSubscribed(!subscribed);
+    } catch (e) {
+      console.error(`Failed to ${subscribed ? 'unsubscribe' : 'subscribe'}:`, e);
+    }
   };
+
+  React.useEffect(() => {
+    const debugValues = { genesis, filter, sortOrder, userTrust, minTrust, subscribed };
+    console.log('Updating window.myModuleDebug:', debugValues);
+    window.myModuleDebug = debugValues;
+  }, [genesis, filter, sortOrder, userTrust, minTrust, subscribed]);
 
   React.useEffect(() => {
     async function loadVotes() {
       setLoading(true);
 
       try {
-        // Step 1: Get all votes
-        const data = await proxyRequest(`${BACKEND_BASE}/ledger/list/objects`, { method: 'GET' });
-        const votes = data.votes || [];
+        const response = await proxyRequest(`${BACKEND_BASE}/ledger/list/objects`, { method: 'GET' });
+        const votes = response.data || [];
         setVoteList(votes);
 
-        // Step 2: Fetch weighted counts for each vote
         const counts = {};
         for (const vote of votes) {
           try {
-            const countResult  = await proxyRequest(`${BACKEND_BASE}/weighted-results/${vote.slug}`, { method: 'GET' });
-            counts[vote.slug] = countResult ;
+            const response  = await proxyRequest(`${BACKEND_BASE}/weighted-results/${vote.slug}`, { method: 'GET' });
+            counts[vote.slug] = response.data.countResult ;
           } catch (err) {
             console.warn(`Failed to fetch weighted vote count for ${vote.slug}`, err);
             counts[vote.slug] = {};
@@ -132,10 +126,7 @@ function VotingPageComponent() {
         }
         setWeightedVoteCounts(counts);
       } catch (e) {
-        showErrorDialog({
-          message: 'Failed to load votes',
-          note: e.message
-        });
+        showErrorDialog({ message: 'Failed to load votes', note: e.message });
       }
 
       setLoading(false);
@@ -203,11 +194,11 @@ function VotingPageComponent() {
                     <ul style={{ fontSize: '0.9rem' }}>
                       {vote.optionAccounts.map((opt, idx) => {
                         const label = vote.option_labels?.[idx] || `Option ${idx + 1}`;
-                        const weightedCount = weightedVoteCounts?.[vote.slug]?.[opt] ?? '...';
+                        const weightedCount = weightedVoteCounts?.[vote.slug]?.[opt] ?? 0;
 
                         return (
                           <li key={opt}>
-                            <strong>{label}</strong>: {weightedCount} weighted NXS
+                            <strong>{label}</strong>: {Number(weightedCount).toLocaleString(undefined, { maximumFractionDigits: 2 })} weighted NXS
                           </li>
                         );
                       })}
