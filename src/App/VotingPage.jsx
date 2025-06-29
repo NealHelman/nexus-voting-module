@@ -127,18 +127,26 @@ function VotingPageComponent() {
       try {
         const response = await proxyRequest(`${BACKEND_BASE}/ledger/list/objects`, { method: 'GET' });
         const votes = response.data || [];
-        setVoteList(votes);
 
         const counts = {};
+        const voteCounts = {};
         for (const vote of votes) {
           try {
             const response  = await proxyRequest(`${BACKEND_BASE}/weighted-results/${vote.slug}`, { method: 'GET' });
+            console.log('response: ', response);
             counts[vote.slug] = response.data.countResult;
+            voteCounts[vote.slug] = response.data.totalUniqueVotes || 0;
           } catch (err) {
             console.warn(`Failed to fetch weighted vote count for ${vote.slug}`, err);
             counts[vote.slug] = {};
+            vote.voteCount = voteCounts[vote.slug];
           }
         }
+        for (const vote of votes) {
+          vote.voteCount = voteCounts[vote.slug] || 0;
+        }
+
+        setVoteList(votes);
         setWeightedVoteCounts(counts);
       } catch (e) {
         showErrorDialog({ message: 'Failed to load votes', note: e.message });
@@ -182,7 +190,7 @@ function VotingPageComponent() {
           <p>
             Your Trust Score: {(userTrust ?? 0).toLocaleString()} |{' '}
             Your Voting Weight: {(userWeight ?? 0).toLocaleString()} |{' '}
-            Number of Votes Cast: {(userVotesCast ?? 0).toLocaleString()}
+            Number of Votes You've Cast: {(userVotesCast ?? 0).toLocaleString()}
           </p>
         </div>
       </FieldSet>
@@ -211,10 +219,37 @@ function VotingPageComponent() {
               <ul>
                 {filteredVotes.map((vote) => (
                   <li key={vote.id}>
-                    <Link to={`/issue/${vote.id}`}>{vote.title}</Link>
-                    {vote.creator_genesis && vote.creator_genesis === genesis && (
-                      <div><Link to={`/admin?edit=${vote.id}`}>(edit)</Link></div>
-                    )}
+                    <div
+                      key={vote.slug}
+                      style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'flex-start',
+                        gap: '1rem',
+                        padding: '1rem 0',
+                        borderBottom: '1px solid #ccc'
+                      }}
+                    >
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontWeight: 'bold', marginBottom: '0.25rem' }}>{vote.title}</div>
+                        <div style={{ fontSize: '0.9rem', lineHeight: '1.4' }}>
+                          <div>Created On: {new Date(vote.created_at * 1000).toLocaleDateString()}</div>
+                          <div>Deadline: {new Date(vote.deadline * 1000).toLocaleDateString()}</div>
+                          <div>Number of Votes Cast: {vote.voteCount?.toLocaleString() ?? '0'}</div>
+                        </div>
+                      </div>
+
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', minWidth: '130px' }}>
+                        <Link to={`/issue/${vote.id}`}>
+                          <Button style={{ width: '100%' }}>Details/Vote</Button>
+                        </Link>
+                        {vote.creator_genesis === genesis && (
+                          <Link to={`/admin?edit=${vote.id}`}>
+                            <Button style={{ width: '100%' }}>Edit</Button>
+                          </Link>
+                        )}
+                      </div>
+                    </div>
                     {vote.optionAccounts && (
                       <ul style={{ fontSize: '0.9rem' }}>
                         {vote.optionAccounts.map((opt, idx) => {
@@ -223,7 +258,7 @@ function VotingPageComponent() {
 
                           return (
                             <li key={opt}>
-                              <strong>{label}</strong>: {Number(weightedCount).toLocaleString(undefined, { maximumFractionDigits: 2 })} weighted NXS
+                              <strong>{label}</strong>: {(Number(weightedCount) / 1e8).toLocaleString(undefined, { maximumFractionDigits: 2 })} weighted NXS
                             </li>
                           );
                         })}
