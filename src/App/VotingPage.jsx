@@ -22,6 +22,8 @@ function VotingPageComponent() {
   const [canAccessAdmin, setCanAccessAdmin] = React.useState(0);
   const [subscribed, setSubscribed] = React.useState(0);
   const [userTrust, setUserTrust] = React.useState(0);
+  const [userWeight, setUserWeight] = React.useState(0);
+  const [userVotesCast, setUserVotesCast] = React.useState(0);
   const [weightedVoteCounts, setWeightedVoteCounts] = React.useState({});
   const [loading, setLoading] = React.useState(true);
   const [voteList, setVoteList] = React.useState([]);
@@ -67,9 +69,11 @@ function VotingPageComponent() {
 
     const checkTrust = async () => {
       try {
-        const trustScore = await apiCall('finance/list/trust/trust', { name: 'trust' });
-        const trust = trustScore?.[0]?.trust || 0;
+        const response = await apiCall('finance/list/trust/trust,stake', { name: 'trust' });
+        const trust = response?.[0]?.trust || 0;
+        const stake = response?.[0]?.stake || 0;
         setUserTrust(trust);
+        setUserWeight(trust * stake);
         if (trust >= minTrust) setCanAccessAdmin(1);
       } catch (e) {
         showErrorDialog({ message: 'Failed to retrieve trust level', note: e.message });
@@ -77,8 +81,19 @@ function VotingPageComponent() {
       }
     };
 
+    const fetchVotesCast = async () => {
+      try {
+        const response = await proxyRequest(`${BACKEND_BASE}/votes-cast/${genesis}`, { method: 'GET' });
+        setUserVotesCast(response.data.votesCast || 0);
+      } catch (e) {
+        console.error('Failed to fetch number of votes cast:', e);
+        setUserVotesCast(0);
+      }
+    };
+
     checkSubscriptionStatus();
     checkTrust();
+    fetchVotesCast();
   }, [genesis, minTrust]); // ✅ depend on genesis, not dispatch
 
   const handleSubscriptionToggle = async () => {
@@ -118,7 +133,7 @@ function VotingPageComponent() {
         for (const vote of votes) {
           try {
             const response  = await proxyRequest(`${BACKEND_BASE}/weighted-results/${vote.slug}`, { method: 'GET' });
-            counts[vote.slug] = response.data.countResult ;
+            counts[vote.slug] = response.data.countResult;
           } catch (err) {
             console.warn(`Failed to fetch weighted vote count for ${vote.slug}`, err);
             counts[vote.slug] = {};
@@ -133,7 +148,7 @@ function VotingPageComponent() {
     }
 
     loadVotes();
-  }, []);
+  }, [genesis]);
   
   return (
     <Panel title="Nexus Community On-Chain Voting - Issue Display" icon={{ url: 'voting.svg', id: 'icon' }}>
@@ -162,54 +177,66 @@ function VotingPageComponent() {
           {canAccessAdmin && <Button><Link to="/admin" style={{ textDecoration: 'none', color: 'inherit' }}>Enter a New Issue to Vote On</Link></Button>}
         </div>
       </FieldSet>
-      <div style={{ display: 'flex', justifyContent: 'center', gap: '1rem', marginBottom: '1rem', marginTop: '1rem' }}>
-        {loading ? <p>Loading...</p> : (() => {
-          const filteredVotes = voteList
-            .filter(vote => vote.min_trust === undefined || userTrust >= vote.min_trust)
-            .filter(vote => {
-              const now = Date.now() / 1000;
-              if (filter === 'active') return !vote.deadline || vote.deadline > now;
-              if (filter === 'closed') return vote.deadline && vote.deadline <= now;
-              return true;
-            })
-            .sort((a, b) => {
-              return sortOrder === 'newest'
-                ? b.created_at - a.created_at
-                : a.created_at - b.created_at;
-            });
-
-          if (filteredVotes.length === 0) {
-            return <p>No voting issues to display for this filter.</p>;
-          }
-
-          return (
-            <ul>
-              {filteredVotes.map((vote) => (
-                <li key={vote.id}>
-                  <Link to={`/issue/${vote.id}`}>{vote.title}</Link>
-                  {vote.creator_genesis && vote.creator_genesis === genesis && (
-                    <div><Link to={`/admin?edit=${vote.id}`}>(edit)</Link></div>
-                  )}
-                  {vote.optionAccounts && (
-                    <ul style={{ fontSize: '0.9rem' }}>
-                      {vote.optionAccounts.map((opt, idx) => {
-                        const label = vote.option_labels?.[idx] || `Option ${idx + 1}`;
-                        const weightedCount = weightedVoteCounts?.[vote.slug]?.[opt] ?? 0;
-
-                        return (
-                          <li key={opt}>
-                            <strong>{label}</strong>: {Number(weightedCount).toLocaleString(undefined, { maximumFractionDigits: 2 })} weighted NXS
-                          </li>
-                        );
-                      })}
-                    </ul>
-                  )}
-                </li>
-              ))}
-            </ul>
-          );
-        })()}
+      <FieldSet legend='Your Voting Power' style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1rem' }}>
+        <div style={{ display: 'flex', gap: '1rem', marginBottom: '1rem', marginTop: '1rem' }}>
+          <p>
+            Your Trust Score: {(userTrust ?? 0).toLocaleString()} |{' '}
+            Your Voting Weight: {(userWeight ?? 0).toLocaleString()} |{' '}
+            Number of Votes Cast: {(userVotesCast ?? 0).toLocaleString()}
+          </p>
         </div>
+      </FieldSet>
+      <FieldSet legend='Votes (Filtered & Sorted)' style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1rem' }}>
+        <div style={{ display: 'flex', justifyContent: 'center', gap: '1rem', marginBottom: '1rem', marginTop: '1rem' }}>
+          {loading ? <p>Loading...</p> : (() => {
+            const filteredVotes = voteList
+              .filter(vote => vote.min_trust === undefined || userTrust >= vote.min_trust)
+              .filter(vote => {
+                const now = Date.now() / 1000;
+                if (filter === 'active') return !vote.deadline || vote.deadline > now;
+                if (filter === 'closed') return vote.deadline && vote.deadline <= now;
+                return true;
+              })
+              .sort((a, b) => {
+                return sortOrder === 'newest'
+                  ? b.created_at - a.created_at
+                  : a.created_at - b.created_at;
+              });
+
+            if (filteredVotes.length === 0) {
+              return <p>No voting issues to display for this filter.</p>;
+            }
+
+            return (
+              <ul>
+                {filteredVotes.map((vote) => (
+                  <li key={vote.id}>
+                    <Link to={`/issue/${vote.id}`}>{vote.title}</Link>
+                    {vote.creator_genesis && vote.creator_genesis === genesis && (
+                      <div><Link to={`/admin?edit=${vote.id}`}>(edit)</Link></div>
+                    )}
+                    {vote.optionAccounts && (
+                      <ul style={{ fontSize: '0.9rem' }}>
+                        {vote.optionAccounts.map((opt, idx) => {
+                          const label = vote.option_labels?.[idx] || `Option ${idx + 1}`;
+                          const weightedCount = weightedVoteCounts?.[vote.slug]?.[opt] ?? 0;
+
+                          return (
+                            <li key={opt}>
+                              <strong>{label}</strong>: {Number(weightedCount).toLocaleString(undefined, { maximumFractionDigits: 2 })} weighted NXS
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    )}
+                    <hr />
+                  </li>
+                ))}
+              </ul>
+            );
+          })()}
+        </div>
+      </FieldSet>
     </Panel>
   );
 }
