@@ -2,7 +2,7 @@
 import { compressToUTF16, decompressFromUTF16 } from 'lz-string';
 import nexusVotingService from '../services/nexusVotingService';
 import axios from 'axios';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { proxyRequest } from 'nexus-module';
 import { sha256FromFile } from '../utils/ipfs';
 import { v4 as uuidv4 } from 'uuid';
@@ -50,6 +50,7 @@ function AdminPageComponent() {
     ? 'Nexus Community On-Chain Voting – Edit Voting Issue'
     : 'Nexus Community On-Chain Voting – Enter New Voting Issue';
   const uuid = uuidv4();
+  const navigate = useNavigate();
 
   function formatDateLocal(ts) {
     const date = new Date(ts * 1000);
@@ -67,6 +68,14 @@ function AdminPageComponent() {
   
   function sleep(time) {
     return new Promise((resolve) => setTimeout(resolve, time));
+  };
+  
+  function handleNewIssueClick() {
+    navigate('/admin');
+    setTimeout(() => {
+      const el = document.getElementById('top');
+      if (el) el.scrollIntoView({ behavior: 'smooth' });
+    }, 100); // slight delay to ensure render
   };
 
   React.useEffect(() => {
@@ -215,7 +224,7 @@ function AdminPageComponent() {
 
   const createVote = async () => {
     setIsSubmitting(true);
-    setMessage('Please while the voting issue data is submmitted...<br />It will take a bit of time, since several objects need to be written to the blockchain.');
+    setMessage('Please wait while the voting issue data is submmitted...<br />First, the NXS must be claimed by the Votin Authority...<br />Then, several objects need to be written to the blockchain.<br />Please be patient.');
     if (!title.trim() || !description.trim() || optionLabels.length < 2 || optionLabels.some(l => !l.trim())) {
       setMessage('Please fill in the title, description, and at least two valid option labels.');
       return;
@@ -310,13 +319,6 @@ function AdminPageComponent() {
         };
       });
 
-      const payload = {
-        assetConfig,
-        optionAccounts
-      };
-      
-      console.log("payload: ", payload);
-    
       if (editingId) {
         await nexusVotingService.updateVoteViaBackend({
           assetConfig: stringifiedAssetConfig,
@@ -341,34 +343,28 @@ function AdminPageComponent() {
 
         const result = response.data ?? response; // fallback if not Axios
         if (!result.success) {
+          showErrorDialog({
+            message: 'NXS debit failed',
+            note: 'No txid returned.'
+          });
           return;
         }
         txidString = result.txid.toString();
+        console.log('txidString: ', txidString);
       } catch (e) {
         showErrorDialog({
           message: 'Error during sending voting issue creation fee',
           note: e.message
         });
+        return;
       }
 
-      const maxWaitMs = 20 * 60 * 1000;
-      const pollIntervalMs = 10000;
-      const start = Date.now();
-      
-      while (Date.now() - start < maxWaitMs) {
-        const res = await apiCall('ledger/get/transaction', { txid: txidString });
-        console.log("res: ", res);
-        if (res.contracts[0]?.claimed > 0) {
-          await sleep(10000)
-          const result = await nexusVotingService.createVoteViaBackend(payload);
-          if (result.success) showSuccessDialog({ 
-            message: 'Success!',
-            note: 'Vote created...'
-          });
-          return;
-        }
-        await new Promise(resolve => setTimeout(resolve, pollIntervalMs));
-      }
+      const result = await nexusVotingService.createVoteViaBackend(txidString, assetConfig, optionAccounts);
+      if (result.success) showSuccessDialog({ 
+        message: 'Success!',
+        note: 'Vote created...'
+      });
+      return;
 
       showErrorDialog({
         message: 'Timeout waiting for NXS transfer. Please try again.'
@@ -387,7 +383,7 @@ function AdminPageComponent() {
 
   return (
     <Panel title={panelTitle} icon={{ url: 'voting.svg', id: 'icon' }}>
-      <div style={{ opacity: isSubmitting ? 0.5 : 1, pointerEvents: isSubmitting ? 'none' : 'auto' }}>
+      <div id='top' style={{ opacity: isSubmitting ? 0.5 : 1, pointerEvents: isSubmitting ? 'none' : 'auto' }}>
         {isSubmitting && (
           <div style={{
             position: 'fixed',
@@ -547,6 +543,7 @@ function AdminPageComponent() {
           <Button onClick={createVote} disabled={byteCount > 1024 || isSubmitting}>
             Submit Voting Issue
           </Button>
+          <Button disabled={isSubmitting} onClick={handleNewIssueClick}>Enter a New Issue</Button>
           <Button disabled={isSubmitting}>
             <Link to="/" style={{ textDecoration: 'none', color: 'inherit' }}>
               Return to Voting Page

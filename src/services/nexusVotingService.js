@@ -2,6 +2,10 @@ import { proxyRequest } from 'nexus-module';
 
 const BACKEND_BASE = 'http://65.20.79.65:4006';
 
+  const {
+    utilities: { showErrorDialog },
+  } = NEXUS;
+
 const nexusVotingService = {
   getProtectedValues: async () => {
     const environment = process.env.NODE_ENV;
@@ -13,19 +17,23 @@ const nexusVotingService = {
     return data;
   },
   
-  createVoteViaBackend: async (issue) => {
-    console.log("issue: ", issue);
+  createVoteViaBackend: async (txid, assetConfig, optionAccounts) => {
     const response = await proxyRequest(
       `${BACKEND_BASE}/create-vote`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        data: issue
+        data: {
+          txid,
+          assetConfig,
+          optionAccounts
+        }
       }
     );
 
-    if (!response || !response.data?.success) {
-      throw new Error('Failed to contact VAS backend or backend returned failure');
+    if (!response.success) {
+      showErrorDialog({ message: 'Vote creation failed', note: response.error || 'Unknown error' });
+      return;
     }
 
     console.log("response: ", response.data);

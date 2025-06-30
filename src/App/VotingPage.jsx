@@ -126,11 +126,23 @@ function VotingPageComponent() {
 
       try {
         const response = await proxyRequest(`${BACKEND_BASE}/ledger/list/objects`, { method: 'GET' });
-        const votes = response.data || [];
+        const rawVotes = response.data || [];
+        console.log('rawVotes: ', rawVotes);
+
+        const validVotes = rawVotes.flatMap(vote => {
+          try {
+            decompressFromUTF16(vote.config); // ensure config is valid
+            return [vote];
+          } catch (e) {
+            console.warn(`Skipping corrupt vote asset ${vote.name}:`, e);
+            return [];
+          }
+        });
+        console.log('validVotes:', validVotes);
 
         const counts = {};
         const voteCounts = {};
-        for (const vote of votes) {
+        for (const vote of validVotes) {
           try {
             const response  = await proxyRequest(`${BACKEND_BASE}/weighted-results/${vote.slug}`, { method: 'GET' });
             console.log('response: ', response);
@@ -142,11 +154,11 @@ function VotingPageComponent() {
             vote.voteCount = voteCounts[vote.slug];
           }
         }
-        for (const vote of votes) {
+        for (const vote of validVotes) {
           vote.voteCount = voteCounts[vote.slug] || 0;
         }
 
-        setVoteList(votes);
+        setVoteList(validVotes);
         setWeightedVoteCounts(counts);
       } catch (e) {
         showErrorDialog({ message: 'Failed to load votes', note: e.message });
