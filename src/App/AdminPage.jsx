@@ -224,7 +224,7 @@ function AdminPageComponent() {
 
   const createVote = async () => {
     setIsSubmitting(true);
-    setMessage('Please wait while the voting issue data is submmitted...<br />First, the NXS must be claimed by the Votin Authority...<br />Then, several objects need to be written to the blockchain.<br />Please be patient.');
+    setMessage('Please wait while the voting issue data is submmitted...<br />First, the NXS must be claimed by the Voting Authority...<br />Then, several objects need to be written to the blockchain.<br />PLEASE BE PATIENT.');
     if (!title.trim() || !description.trim() || optionLabels.length < 2 || optionLabels.some(l => !l.trim())) {
       setMessage('Please fill in the title, description, and at least two valid option labels.');
       return;
@@ -293,6 +293,8 @@ function AdminPageComponent() {
       name: assetName,
       type: 'asset',
       format: 'JSON',
+      title: issue.title,
+      deadline: issue.deadline,
       json: [{
         name: 'config',
         type: 'string',

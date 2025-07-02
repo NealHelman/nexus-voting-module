@@ -30,6 +30,11 @@ function VotingPageComponent() {
   const [minTrust, setMinTrust] = React.useState(0);
   const [votingAuthoritySigchain, setVotingAuthoritySigchain] = React.useState('');
   const [votingAuthorityAccount, setVotingAuthorityAccount] = React.useState('');
+  const [currentPage, setCurrentPage] = React.useState(1);
+  const [votesPerPage, setVotesPerPage] = React.useState(10);
+  const [totalPages, setTotalPages] = React.useState(1);
+  const [sortField, setSortField] = React.useState('created');
+  const [sortDirection, setSortDirection] = React.useState('desc');
   
   React.useEffect(() => {
     nexusVotingService.getProtectedValues().then(({ data }) => {
@@ -121,13 +126,20 @@ function VotingPageComponent() {
   }, [genesis, filter, sortOrder, userTrust, minTrust, subscribed]);
 
   React.useEffect(() => {
-    async function loadVotes() {
+    async function loadVotes(page = 1) {
       setLoading(true);
 
       try {
-        const response = await proxyRequest(`${BACKEND_BASE}/ledger/list/objects`, { method: 'GET' });
-        const rawVotes = response.data || [];
+        const offset = (page - 1) * votesPerPage;
+        const response = await proxyRequest(
+          `${BACKEND_BASE}/ledger/list/objects/paginated?limit=${votesPerPage}&offset=${offset}&sort=${sortField}&direction=${sortDirection}`,
+          { method: 'GET' }
+        );
+
+        const rawVotes = response.data?.objects || [];
         console.log('rawVotes: ', rawVotes);
+        const pageCount = Math.ceil((response.data?.total || 1) / votesPerPage);
+        setTotalPages(pageCount);
 
         const validVotes = rawVotes.flatMap(vote => {
           try {
@@ -167,14 +179,25 @@ function VotingPageComponent() {
       setLoading(false);
     }
 
-    loadVotes();
-  }, [genesis]);
-  
+    if (genesis) loadVotes(currentPage);
+  }, [genesis, currentPage, votesPerPage, sortField, sortDirection]);
+
+  const handlePageSizeChange = (e) => {
+    setVotesPerPage(parseInt(e.target.value, 10));
+    setCurrentPage(1);
+  };
+
+  const handleSortChange = (field) => {
+    setSortField(field);
+    setCurrentPage(1);
+  };
+
   return (
     <Panel title="Nexus Community On-Chain Voting - Issue Display" icon={{ url: 'voting.svg', id: 'icon' }}>
       <FieldSet style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1rem' }}>
         <div style={{ display: 'flex', gap: '1rem', marginBottom: '1rem', marginTop: '1rem' }}>
-          <label htmlFor="filterSelect" style={{ marginBottom: '0.25rem' }}>Filter Voting Issues</label>
+          <label htmlFor="filterSelect" style={{ marginBottom: 'auto', marginTop: 'auto', textAlign: 'center' }}>
+          Status&nbsp;Filter
           <Dropdown label="Filter">
             <select value={filter} onChange={e => setFilter(e.target.value)}>
               <option value="all">All</option>
@@ -182,13 +205,47 @@ function VotingPageComponent() {
               <option value="closed">Closed</option>
             </select>
           </Dropdown>
-          <label htmlFor="sortSelect" style={{ marginBottom: '0.25rem' }}>Sort Voting Issues</label>
+          </label>
+          <label htmlFor="sortSelect" style={{ marginBottom: 'auto', marginTop: 'auto', textAlign: 'center' }}>
+          Sort&nbsp;Order
           <Dropdown label="Sort">
             <select value={sortOrder} onChange={e => setSortOrder(e.target.value)}>
-              <option value="newest">Newest First</option>
-              <option value="oldest">Oldest First</option>
+              <option value="asc">Ascending</option>
+              <option value="desc">Descending</option>
             </select>
           </Dropdown>
+        </label>
+        <label htmlFor="sortBy" style={{ marginBottom: 'auto', marginTop: 'auto', textAlign: 'center' }}>
+          Sort&nbsp;By
+          <Dropdown label="SortBy">
+          <select value={sortField} onChange={e => handleSortChange(e.target.value)} style={{ marginLeft: '0.5rem' }}>
+            <option value="created">Created</option>
+            <option value="title">Title</option>
+            <option value="deadline">Deadline</option>
+          </select>
+          </Dropdown>
+        </label>
+        <label htmlFor="direction" style={{ marginBottom: 'auto', marginTop: 'auto', textAlign: 'center' }}>
+          Direction
+          <Dropdown label="SortDirection">
+          <select value={sortDirection} onChange={e => setSortDirection(e.target.value)} style={{ marginLeft: '0.5rem' }}>
+            <option value="asc">Ascending</option>
+            <option value="desc">Descending</option>
+          </select>
+          </Dropdown>
+        </label>	  
+        <label htmlFor="pageSize" style={{ marginBottom: 'auto', marginTop: 'auto', textAlign: 'center' }}>
+          Page Size:
+          <Dropdown label="PageSize">
+          <select value={votesPerPage} onChange={handlePageSizeChange} style={{ marginLeft: '0.5rem' }}>
+              <option value="3">3</option>
+              <option value="5">5</option>
+              <option value="10">10</option>
+              <option value="25">25</option>
+              <option value="50">50</option>
+          </select>
+          </Dropdown>
+        </label>
         </div>
         <div style={{ display: 'flex', gap: '1rem', marginBottom: '1rem', marginTop: '1rem' }}>
           <Button onClick={handleSubscriptionToggle}>
@@ -206,7 +263,7 @@ function VotingPageComponent() {
           </p>
         </div>
       </FieldSet>
-      <FieldSet legend='Votes (Filtered & Sorted)' style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1rem' }}>
+      <FieldSet legend='Issues (Filtered & Sorted)' style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1rem' }}>
         <div style={{ display: 'flex', justifyContent: 'center', gap: '1rem', marginBottom: '1rem', marginTop: '1rem' }}>
           {loading ? <p>Loading...</p> : (() => {
             const filteredVotes = voteList
@@ -217,11 +274,6 @@ function VotingPageComponent() {
                 if (filter === 'closed') return vote.deadline && vote.deadline <= now;
                 return true;
               })
-              .sort((a, b) => {
-                return sortOrder === 'newest'
-                  ? b.created_at - a.created_at
-                  : a.created_at - b.created_at;
-              });
 
             if (filteredVotes.length === 0) {
               return <p>No voting issues to display for this filter.</p>;
@@ -243,7 +295,7 @@ function VotingPageComponent() {
                       }}
                     >
                       <div style={{ flex: 1 }}>
-                        <div style={{ fontWeight: 'bold', marginBottom: '0.25rem' }}>{vote.title}</div>
+                        <div style={{ fontWeight: 'bold', marginBottom: '0.25rem', color: '#00b7fa' }}>{vote.title}</div>
                         <div style={{ fontSize: '0.9rem', lineHeight: '1.4' }}>
                           <div>Created On: {new Date(vote.created_at * 1000).toLocaleDateString()}</div>
                           <div>Deadline: {new Date(vote.deadline * 1000).toLocaleDateString()}</div>
@@ -282,6 +334,23 @@ function VotingPageComponent() {
               </ul>
             );
           })()}
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'center', gap: '1rem', marginTop: '1rem', flexWrap: 'wrap' }}>
+          <Button onClick={() => setCurrentPage(p => Math.max(p - 1, 1))} disabled={currentPage === 1}>
+            Previous
+          </Button>
+          {[...Array(totalPages)].map((_, idx) => (
+            <Button
+              key={idx + 1}
+              variant={currentPage === idx + 1 ? 'filled' : 'outline'}
+              onClick={() => setCurrentPage(idx + 1)}
+            >
+              {idx + 1}
+            </Button>
+          ))}
+          <Button onClick={() => setCurrentPage(p => Math.min(p + 1, totalPages))} disabled={currentPage === totalPages}>
+            Next
+          </Button>
         </div>
       </FieldSet>
     </Panel>
