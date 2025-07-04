@@ -2,7 +2,7 @@
 import { compressToBase64, decompressFromBase64 } from 'lz-string';
 import nexusVotingService from '../services/nexusVotingService';
 import axios from 'axios';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams  } from 'react-router-dom';
 import { proxyRequest } from 'nexus-module';
 import { sha256FromFile } from '../utils/ipfs';
 import { v4 as uuidv4 } from 'uuid';
@@ -42,8 +42,10 @@ function AdminPageComponent() {
   const [namedAccountCost, setNamedAccountCost] = React.useState(0);
   const [submissionCost, setSubmissionCost] = React.useState(0);
   const [isSubmitting, setIsSubmitting] = React.useState(false);
+  const [isUploading, setIsUploading] = React.useState(false);
+  const [submitButtonTitle, setSubmitButtonTitle] = React.useState('Submit');
   
-  const searchParams = new URLSearchParams(window.location.search);
+  const [searchParams] = useSearchParams();
   const isEditing = searchParams.has('edit');
   const editingId = searchParams.get('edit');
   const panelTitle = isEditing
@@ -51,6 +53,7 @@ function AdminPageComponent() {
     : 'Nexus Community On-Chain Voting – Enter New Voting Issue';
   const uuid = uuidv4();
   const navigate = useNavigate();
+  const fileInputRef = React.useRef();
 
   function formatDateLocal(ts) {
     const date = new Date(ts * 1000);
@@ -78,6 +81,12 @@ function AdminPageComponent() {
     }, 100); // slight delay to ensure render
   };
 
+  React.useEffect(() => {
+    const debugValues = { editingId };
+    console.log('Updating window.myModuleDebug:', debugValues);
+    window.myModuleDebug = debugValues;
+  }, [editingId]);
+  
   React.useEffect(() => {
     nexusVotingService.getProtectedValues().then(({ data }) => {
       setVotingAuthoritySigchain(data.VOTING_AUTHORITY_SIGCHAIN);
@@ -108,62 +117,93 @@ function AdminPageComponent() {
   }, []);
     
   React.useEffect(() => {
-    const debugValues = { creatorGenesis };
+    const debugValues = { creatorGenesis, analysisGuid };
     console.log('Updating window.myModuleDebug:', debugValues);
     window.myModuleDebug = debugValues;
-  }, [creatorGenesis]);
+  }, [creatorGenesis, analysisGuid]);
 
   React.useEffect(() => {
-    if (!creatorGenesis) return; // 🚨 wait for genesis to be set
-    
+    if (!creatorGenesis) return;
+
     setDeadline(calculateDefaultDeadline());
-    
+
     if (editingId) {
-      try {
-        apiCall('assets/get/asset', { address: editingId })
-          .then(async res => {
-            const config = JSON.parse(decompressFromBase64(res.config));
+      const fetchAsset = async () => {
+        setSubmitButtonTitle('Update');
+        try {
+          const data = await apiCall('assets/get/asset', { address: editingId });
+          const config = JSON.parse(decompressFromBase64(data.config));
+          console.log('config: ', config);
 
-            setTitle(config.title);
-            setDescription(config.description);
-            setOptionLabels(config.option_labels);
-            setMinTrust(config.min_trust);
-            setVoteFinality(config.vote_finality);
-            setOrganizerName(config.organizer_name);
-            setOrganizerTelegram(config.organizer_telegram);
-            setDeadline(config.deadline);
-            setSupportingDocs(config.supporting_docs || []);
-            setCreatorGenesis(config.creator_genesis || null);
+          setTitle(data.title);
+          setDescription(config.description);
+          setOptionLabels(config.option_labels);
+          setMinTrust(config.min_trust);
+          setVoteFinality(config.vote_finality);
+          setOrganizerName(config.organizer_name);
+          setOrganizerTelegram(config.organizer_telegram);
+          setDeadline(data.deadline);
+          setSupportingDocs(config.supporting_docs || []);
+          setCreatorGenesis(data.creatorGenesis || null);
+          setJsonGuid(config.issue_info_guid || null);
+          const analysisGuid = config.supporting_docs?.find(doc => doc.is_analysis).guid;
+          setAnalysisGuid(analysisGuid || null);
+        } catch (err) {
+          console.error('Failed to load vote asset:', err);
+        }
+      };
 
-            // ✅ Load offloaded fields if IPFS GUID is present
-            if (config.info_guid) {
-              try {
-                const ipfsResponse = await axios.get(`https://ipfs.io/ipfs/${config.info_guid}`);
-                const jsonInfo = ipfsResponse.data;
-
-                setSummaryPro(jsonInfo.summary_pro || '');
-                setSummaryCon(jsonInfo.summary_con || '');
-                setPossibleOutcomes(jsonInfo.possible_outcomes || '');
-              } catch (ipfsErr) {
-                console.error(`Failed to fetch IPFS content for GUID ${config.info_guid}:`, ipfsErr);
-              }
-            }
-          })
-          .catch(err => console.error('Failed to prefill voting issue fields:', err));
-      } catch (e) {
-        showErrorDialog({
-          message: 'Failed to retrieve voting issue',
-          note: e.message
-        });
-      }
+      fetchAsset();
     }
-  }, [creatorGenesis]); // ✅ depend on creatorGenesis, not dispatch
+  }, [creatorGenesis, editingId]);
+  
+  React.useEffect(() => {
+    if (!jsonGuid) return;
+    if (editingId) {
+      const fetchSummaries = async () => {
+        try {
+          const { data } = await proxyRequest(`${BACKEND_BASE}/ipfs/fetch/${jsonGuid}`, { method: 'GET' });
+          console.log('data: ', data);
+          try {
+            const jsonStr = atob(data.base64); // decode base64 to string
+            const parsed = JSON.parse(jsonStr);    // parse JSON
+
+            setSummaryPro(parsed.summary_pro || '');
+            setSummaryCon(parsed.summary_con || '');
+            setPossibleOutcomes(parsed.possible_outcomes || '');
+          } catch (e) {
+            console.error('Failed to parse base64-encoded JSON:', e);
+          }
+        } catch (err) {
+          console.error('Failed to load vote asset:', err);
+        }
+      };
+
+      fetchSummaries();
+    }
+  }, [jsonGuid, editingId]);
   
   const handleFileChange = async (e) => {
+    console.log('handleFileChange called with files:', e.target.files?.length);
+    
+    // Log the actual file names to debug
+    if (e.target.files) {
+      Array.from(e.target.files).forEach((file, index) => {
+        console.log(`File ${index + 1}: ${file.name}, Size: ${file.size}, Type: ${file.type}`);
+      });
+    }
+  
+    setIsUploading(true);
+    
+    try {
     const selectedFiles = Array.from(e.target.files);
     const allowedTypes = ['text/markdown', 'text/plain', 'application/pdf'];
     const filtered = selectedFiles.filter(f => allowedTypes.includes(f.type));
-    if (filtered.length === 0) return;
+    
+    if (filtered.length === 0) {
+      setMessage('No valid files selected. Please choose .md, .txt, or .pdf files.');
+      return;
+    }
 
     const updatedFiles = [];
 
@@ -171,21 +211,20 @@ function AdminPageComponent() {
       try {
         const hash = await sha256FromFile(file);
         if (!hash) {
-          setMessage(`Could not hash ${file.name}. Skipping.`);
+          onError(`Could not hash ${file.name}. Skipping.`);
           continue;
         }
+        
+        console.log(`Hash for ${file.name}: ${hash}`);
 
         const reader = new FileReader();
         const base64 = await new Promise((resolve, reject) => {
-          reader.onload = () => resolve(reader.result.split(',')[1]); // strip "data:...base64,"
+          reader.onload = () => resolve(reader.result.split(',')[1]);
           reader.onerror = () => reject('FileReader failed');
           reader.readAsDataURL(file);
         });
 
         setUploadProgress(prev => ({ ...prev, [file.name]: 0 }));
-        console.log("filename: ", file.name);
-        console.log("type: ", file.type);
-        console.log("base64: ", base64);
 
         const response = await proxyRequest(
           `${BACKEND_BASE}/ipfs/upload`,
@@ -202,23 +241,39 @@ function AdminPageComponent() {
         setUploadProgress(prev => ({ ...prev, [file.name]: 100 }));
         
         if (!response?.data?.success || !response.data.guid) {
-          throw new Error(`Invalid response from backend`);
+          throw new Error(`Invalid response from backend for ${file.name}`);
         }
 
+        console.log(`Successfully uploaded ${file.name} with guid: ${response.data.guid}`);
         updatedFiles.push({ name: file.name, guid: response.data.guid, sha256: hash });
 
-      } catch (e) {
-        console.error(`Failed to upload ${file.name}:`, e);
-        showErrorDialog({
-          message: `Upload failed for ${file.name}`,
-          note: e.message || 'Unknown error'
-        });
+        } catch (e) {
+          console.error(`Failed to upload ${file.name}:`, e);
+          setMessage(`Upload failed for ${file.name}: ${e.message || 'Unknown error'}`);
+        }
       }
-    }
+      
+      if (updatedFiles.length > 0) {
+        setSupportingDocs(prev => [...prev, ...updatedFiles]);
+        setMessage(`${updatedFiles.length} file(s) uploaded successfully.`);
+      } else {
+        setMessage('No files were uploaded successfully.');
+      }
 
-    if (updatedFiles.length > 0) {
-      setSupportingDocs(prev => [...prev, ...updatedFiles]);
-      setMessage(`${updatedFiles.length} file(s) uploaded to backend.`);
+    } catch (error) {
+      console.error('Error in handleFileChange:', error);
+      setMessage(`Upload error: ${error.message || 'Unknown error'}`);
+    } finally {
+      // Always reset the state, regardless of success or failure
+      setIsUploading(false);
+      
+      // Force clear the file input by resetting its value
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+      
+      // Clear upload progress for all files
+      setUploadProgress({});
     }
   };
 
@@ -337,11 +392,19 @@ function AdminPageComponent() {
       });
 
       if (editingId) {
-        await nexusVotingService.updateVoteViaBackend({
-          assetConfig: stringifiedAssetConfig,
-          id: editingId
-        });
-        showSuccessDialog({ message: 'Vote updated successfully.' });
+        try {
+          const assetId = editingId;
+          const updateResult = await nexusVotingService.updateVoteViaBackend(assetId, assetConfig, optionAccounts);
+          if (updateResult.success) showSuccessDialog({ 
+            message: 'Success!',
+            note: 'Vote updated...'
+          });
+        } catch (e) {
+          showErrorDialog({
+            message: 'Error updating voting issue',
+            note: e.message
+          });
+        }
         return;
       }
 
@@ -462,7 +525,10 @@ function AdminPageComponent() {
           </label>
         </FieldSet>
         
-        <FieldSet legend="Options">
+        <FieldSet legend="Voting Options">
+          <div style={{ display : isEditing ? 'inline' : 'none', marginBottom: '1rem', display: 'flex', justifyContent: 'center', textAlign: 'center' }}>
+            Unfortunately, the Nexus API  does not currently provide a mechanism for changing the voting option labels while editing the voting option.
+          </div>
           {optionLabels.map((label, idx) => (
             <div
               key={idx}
@@ -475,11 +541,12 @@ function AdminPageComponent() {
             >
               <div style={{ flexGrow: 1 }}>
                 <label htmlFor={`option${idx + 1}`} style={{ display: 'block', marginBottom: '0.25rem' }}>
-                  {`Option ${idx + 1}`}
+                  {`Voting Option ${idx + 1}`}
                 </label>
                 <TextField
                   id={`option${idx + 1}`}
                   value={label}
+                  disabled={isEditing}
                   onChange={(e) => {
                     const updated = [...optionLabels];
                     updated[idx] = e.target.value;
@@ -492,6 +559,7 @@ function AdminPageComponent() {
                 <Button
                   size="sm"
                   variant="destructive"
+                  disabled={isEditing}
                   onClick={() => {
                     const newOptions = optionLabels.filter((_, i) => i !== idx);
                     setOptionLabels(newOptions);
@@ -504,6 +572,7 @@ function AdminPageComponent() {
             </div>
           ))}
         <Button
+          disabled={isEditing}
           onClick={() => {
             const newOptionLabels = [...optionLabels, ''];
             setOptionLabels(newOptionLabels);
@@ -518,11 +587,30 @@ function AdminPageComponent() {
         <FieldSet legend="Supporting Documents">
           <p>Attach a markdown, text, or PDF file to serve as the primary analysis document. You may also attach additional supporting documents.</p>
           <input
+            ref={fileInputRef}
             type="file"
             accept=".md,.txt,.pdf"
             multiple
             onChange={handleFileChange}
+            style={{ display: 'none' }}
+            key={Math.random()} // Force re-render to clear cache
           />
+          
+          {/* Visible button that triggers file input */}
+          <Button
+            onClick={() => {
+              console.log('Button clicked, triggering file input');
+              if (fileInputRef.current) {
+                console.log('File input found, clicking it');
+                fileInputRef.current.click();
+              } else {
+                console.log('File input not found!');
+              }
+            }}
+            disabled={isUploading}
+          >
+            {isUploading ? 'Uploading...' : 'Choose Files'}
+          </Button>
           {Object.entries(uploadProgress).map(([filename, percent]) => (
             <div key={filename} style={{ margin: '0.5em 0' }}>
               <strong>{filename}</strong>
@@ -540,8 +628,28 @@ function AdminPageComponent() {
                   console.log("Rendering doc", doc.name, "with guid", doc.guid, "| Checked:", isChecked);
 
                   return (
-                    <li key={doc.guid}>
+                    <li key={doc.guid} style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
                       <strong>{doc.name}</strong>
+                      {supportingDocs.length > 1 && doc.guid !== analysisGuid && (
+                        <Button
+                          variant="destructive"
+                          size="sm"
+                          onClick={async () => {
+                            try {
+                              const response = await proxyRequest(`${BACKEND_BASE}/ipfs/delete/${doc.guid}`, { method: 'DELETE' });
+                              if (response?.data?.success) {
+                                setSupportingDocs(prev => prev.filter(d => d.guid !== doc.guid));
+                              } else {
+                                showErrorDialog({ message: 'Failed to delete file', note: response?.data?.error || 'Unknown error' });
+                              }
+                            } catch (e) {
+                              showErrorDialog({ message: 'Error deleting file', note: e.message });
+                            }
+                          }}
+                        >
+                          Delete
+                        </Button>
+                      )}
                       <label style={{ marginLeft: '1rem', marginRight: '1rem' }}>
                         <Switch
                           name="analysis_file"
@@ -578,12 +686,14 @@ function AdminPageComponent() {
         <div style={{ display: 'flex', justifyContent: 'center', textAlign: 'center' }}>
           <p dangerouslySetInnerHTML={{ __html: message }} />
         </div>
-        <div style={{ display: 'flex', justifyContent: 'center' }}>
-          Submitting this vote will cost {submissionCost} NXS
-        </div>
+        {!editingId && (
+          <div style={{ display: 'flex', justifyContent: 'center' }}>
+            Submitting this vote will cost {submissionCost} NXS
+          </div>
+        )}
         <div style={{ display: 'flex', justifyContent: 'center', gap: '1rem', marginBottom: '1rem', marginTop: '1rem' }}>
           <Button onClick={createVote} disabled={byteCount > 1024 || isSubmitting}>
-            Submit Voting Issue
+            { submitButtonTitle } Voting Issue
           </Button>
           <Button disabled={isSubmitting} onClick={handleNewIssueClick}>Enter a New Issue</Button>
           <Button disabled={isSubmitting}>

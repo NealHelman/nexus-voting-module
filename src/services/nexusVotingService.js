@@ -30,8 +30,10 @@ const nexusVotingService = {
         }
       }
     );
+    
+    console.log('response: ', response);
 
-    if (!response.success) {
+    if (!response.data.success) {
       showErrorDialog({ message: 'Vote creation failed', note: response.error || 'Unknown error' });
       return;
     }
@@ -40,21 +42,26 @@ const nexusVotingService = {
     return response.data;
   },
 
-  updateVoteViaBackend: async (issue) => {
+  updateVoteViaBackend: async (assetId, assetConfig, optionAccounts) => {
     const response = await proxyRequest(
       `${BACKEND_BASE}/update-vote`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        data: issue
+        data: {
+          assetId,
+          assetConfig,
+          optionAccounts
+        }
       }
     );
 
-    if (!response || !response.success) {
-      throw new Error('Failed to contact VAS backend or backend returned failure');
+    if (!response.data.success) {
+      showErrorDialog({ message: 'Vote update failed', note: response.error || 'Unknown error' });
+      return;
     }
 
-    return response;
+    return response.data;
   }
 };
 

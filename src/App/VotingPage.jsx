@@ -277,7 +277,7 @@ function VotingPageComponent() {
             return (
               <ul>
                 {filteredVotes.map((vote) => (
-                  <li key={vote.id}>
+                  <li key={vote.address}>
                     <div
                       key={vote.slug}
                       style={{
@@ -299,11 +299,11 @@ function VotingPageComponent() {
                       </div>
 
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', minWidth: '130px' }}>
-                        <Link to={`/issue/${vote.id}`}>
+                        <Link to={`/issue/${vote.address}`}>
                           <Button style={{ width: '100%' }}>Details/Vote</Button>
                         </Link>
                         {vote.creatorGenesis === genesis && (
-                          <Link to={`/admin?edit=${vote.id}`}>
+                          <Link to={`/admin?edit=${vote.address}`}>
                             <Button style={{ width: '100%' }}>Edit</Button>
                           </Link>
                         )}
