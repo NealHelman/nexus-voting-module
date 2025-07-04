@@ -2,7 +2,7 @@
 import { useDispatch, useSelector } from 'react-redux';
 import { proxyRequest } from 'nexus-module';
 import { Link } from 'react-router-dom';
-import { decompressFromUTF16 } from 'lz-string';
+import { decompressFromBase64  } from 'lz-string';
 import nexusVotingService from '../services/nexusVotingService';
 import AdminPage from './AdminPage';
 
@@ -16,7 +16,6 @@ function VotingPageComponent() {
   } = NEXUS;
   
   const [filter, setFilter] = React.useState('active');
-  const [sortOrder, setSortOrder] = React.useState('newest');
   const dispatch = useDispatch();
   const [genesis, setGenesis] = React.useState('');
   const [canAccessAdmin, setCanAccessAdmin] = React.useState(0);
@@ -120,10 +119,10 @@ function VotingPageComponent() {
   };
 
   React.useEffect(() => {
-    const debugValues = { genesis, filter, sortOrder, userTrust, minTrust, subscribed };
+    const debugValues = { genesis, filter, sortDirection, userTrust, minTrust, subscribed };
     console.log('Updating window.myModuleDebug:', debugValues);
     window.myModuleDebug = debugValues;
-  }, [genesis, filter, sortOrder, userTrust, minTrust, subscribed]);
+  }, [genesis, filter, sortDirection, userTrust, minTrust, subscribed]);
 
   React.useEffect(() => {
     async function loadVotes(page = 1) {
@@ -131,8 +130,12 @@ function VotingPageComponent() {
 
       try {
         const offset = (page - 1) * votesPerPage;
+        let showMine = '';
+        if (sortField == 'mine') {
+          showMine = `&creatorGenesis=${creatorGenesis}`;
+        };
         const response = await proxyRequest(
-          `${BACKEND_BASE}/ledger/list/objects/paginated?limit=${votesPerPage}&offset=${offset}&sort=${sortField}&direction=${sortDirection}`,
+          `${BACKEND_BASE}/ledger/list/objects/paginated?limit=${votesPerPage}&offset=${offset}&sort=${sortField}&direction=${sortDirection}${showMine}`,
           { method: 'GET' }
         );
 
@@ -143,7 +146,7 @@ function VotingPageComponent() {
 
         const validVotes = rawVotes.flatMap(vote => {
           try {
-            decompressFromUTF16(vote.config); // ensure config is valid
+            decompressFromBase64(vote.config); // ensure config is valid
             return [vote];
           } catch (e) {
             console.warn(`Skipping corrupt vote asset ${vote.name}:`, e);
@@ -180,7 +183,7 @@ function VotingPageComponent() {
     }
 
     if (genesis) loadVotes(currentPage);
-  }, [genesis, currentPage, votesPerPage, sortField, sortDirection]);
+  }, [genesis, currentPage, filter, votesPerPage, sortField, sortDirection]);
 
   const handlePageSizeChange = (e) => {
     setVotesPerPage(parseInt(e.target.value, 10));
@@ -203,18 +206,10 @@ function VotingPageComponent() {
               <option value="all">All</option>
               <option value="active">Active</option>
               <option value="closed">Closed</option>
+              <option value="mine">Just Mine</option>
             </select>
           </Dropdown>
           </label>
-          <label htmlFor="sortSelect" style={{ marginBottom: 'auto', marginTop: 'auto', textAlign: 'center' }}>
-          Sort&nbsp;Order
-          <Dropdown label="Sort">
-            <select value={sortOrder} onChange={e => setSortOrder(e.target.value)}>
-              <option value="asc">Ascending</option>
-              <option value="desc">Descending</option>
-            </select>
-          </Dropdown>
-        </label>
         <label htmlFor="sortBy" style={{ marginBottom: 'auto', marginTop: 'auto', textAlign: 'center' }}>
           Sort&nbsp;By
           <Dropdown label="SortBy">
@@ -226,7 +221,7 @@ function VotingPageComponent() {
           </Dropdown>
         </label>
         <label htmlFor="direction" style={{ marginBottom: 'auto', marginTop: 'auto', textAlign: 'center' }}>
-          Direction
+          Sort Direction
           <Dropdown label="SortDirection">
           <select value={sortDirection} onChange={e => setSortDirection(e.target.value)} style={{ marginLeft: '0.5rem' }}>
             <option value="asc">Ascending</option>
@@ -258,8 +253,8 @@ function VotingPageComponent() {
         <div style={{ display: 'flex', gap: '1rem', marginBottom: '1rem', marginTop: '1rem' }}>
           <p>
             Your Trust Score: {(userTrust ?? 0).toLocaleString()} |{' '}
-            Your Voting Weight: {(userWeight ?? 0).toLocaleString()} |{' '}
-            Number of Votes You've Cast: {(userVotesCast ?? 0).toLocaleString()}
+            Your Voting Weight: {(Number(userWeight) / 1e8).toLocaleString(undefined, { maximumFractionDigits: 2 })} |{' '}
+            Number of Votes You've Cast: {(userVotesCast ?? 0).toLocaleString()} 
           </p>
         </div>
       </FieldSet>
@@ -307,7 +302,7 @@ function VotingPageComponent() {
                         <Link to={`/issue/${vote.id}`}>
                           <Button style={{ width: '100%' }}>Details/Vote</Button>
                         </Link>
-                        {vote.creator_genesis === genesis && (
+                        {vote.creatorGenesis === genesis && (
                           <Link to={`/admin?edit=${vote.id}`}>
                             <Button style={{ width: '100%' }}>Edit</Button>
                           </Link>

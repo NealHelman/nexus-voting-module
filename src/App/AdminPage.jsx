@@ -1,5 +1,5 @@
 // --- AdminPage.jsx ---  
-import { compressToUTF16, decompressFromUTF16 } from 'lz-string';
+import { compressToBase64, decompressFromBase64 } from 'lz-string';
 import nexusVotingService from '../services/nexusVotingService';
 import axios from 'axios';
 import { Link, useNavigate } from 'react-router-dom';
@@ -122,7 +122,7 @@ function AdminPageComponent() {
       try {
         apiCall('assets/get/asset', { address: editingId })
           .then(async res => {
-            const config = JSON.parse(decompressFromUTF16(res.config));
+            const config = JSON.parse(decompressFromBase64(res.config));
 
             setTitle(config.title);
             setDescription(config.description);
@@ -273,34 +273,49 @@ function AdminPageComponent() {
     }));
 
     const config = {
-      title,
       description,
       option_labels: optionLabels,
       min_trust: parseInt(minTrust),
       vote_finality: voteFinality,
       organizer_name: organizerName,
       organizer_telegram: organizerTelegram,
-      deadline: parseInt(deadline),
       issue_info_guid: jsonGuid,
       created_by: createdBy.trim() || 'unknown',
-      creator_genesis: creatorGenesis,
       created_at: createdAt || Math.floor(Date.now() / 1000),
       supporting_docs: flaggedSupportingDocs
     };
 
-    const compressed = compressToUTF16(JSON.stringify(config));
+    const compressed = compressToBase64(JSON.stringify(config));
     const assetConfig = {
       name: assetName,
       type: 'asset',
       format: 'JSON',
-      title: issue.title,
-      deadline: issue.deadline,
-      json: [{
-        name: 'config',
-        type: 'string',
-        value: compressed,
-        mutable: true
-      }],
+      json: [
+        {
+          name: 'title',
+          type: 'string',
+          value: title,
+          mutable: true
+        },
+        {
+          name: 'deadline',
+          type: 'uint64',
+          value: parseInt(deadline),
+          mutable: true
+        },
+        {
+          name: 'creatorGenesis',
+          type: 'string',
+          value: creatorGenesis,
+          mutable: false
+        },
+        {
+          name: 'config',
+          type: 'string',
+          value: compressed,
+          mutable: true
+        }
+      ],
       mutable: true
     };
 
@@ -449,19 +464,44 @@ function AdminPageComponent() {
         
         <FieldSet legend="Options">
           {optionLabels.map((label, idx) => (
-            <React.Fragment key={idx}>
-            <label htmlFor={`option${idx + 1}`} style={{ marginBottom: '0.25rem' }}>{`Option ${idx + 1}`}</label>
-            <TextField
+            <div
               key={idx}
-              label={`Option ${idx + 1}`}
-              value={label}
-              onChange={(e) => {
-                const updated = [...optionLabels];
-                updated[idx] = e.target.value;
-                setOptionLabels(updated);
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                marginBottom: '1rem',
+                gap: '0.5rem',
               }}
-            />
-            </React.Fragment>
+            >
+              <div style={{ flexGrow: 1 }}>
+                <label htmlFor={`option${idx + 1}`} style={{ display: 'block', marginBottom: '0.25rem' }}>
+                  {`Option ${idx + 1}`}
+                </label>
+                <TextField
+                  id={`option${idx + 1}`}
+                  value={label}
+                  onChange={(e) => {
+                    const updated = [...optionLabels];
+                    updated[idx] = e.target.value;
+                    setOptionLabels(updated);
+                  }}
+                />
+              </div>
+
+              {optionLabels.length >= 3 && (
+                <Button
+                  size="sm"
+                  variant="destructive"
+                  onClick={() => {
+                    const newOptions = optionLabels.filter((_, i) => i !== idx);
+                    setOptionLabels(newOptions);
+                  }}
+                  style={{ alignSelf: 'center' }}
+                >
+                  ❌
+                </Button>
+              )}
+            </div>
           ))}
         <Button
           onClick={() => {
