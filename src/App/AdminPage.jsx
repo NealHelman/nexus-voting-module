@@ -74,6 +74,25 @@ function AdminPageComponent() {
   };
   
   function handleNewIssueClick() {
+    setTitle('');
+    setDescription('');
+    setOptionLabels(['', '']);
+    setMinTrust('10000');
+    setVoteFinality('one_time');
+    setOrganizerName('');
+    setOrganizerTelegram('');
+    setDeadline('');
+    setSupportingDocs([]);
+    setJsonGuid('');
+    setAnalysisGuid('');
+    setSubmitButtonTitle('Submit');
+    setMessage('');
+    setSummaryPro('');
+    setSummaryCon('');
+    setPossibleOutcomes('');
+    setCreatedAt('');
+
+
     navigate('/admin');
     setTimeout(() => {
       const el = document.getElementById('top');
@@ -197,17 +216,33 @@ function AdminPageComponent() {
     
     try {
     const selectedFiles = Array.from(e.target.files);
-    const allowedTypes = ['text/markdown', 'text/plain', 'application/pdf'];
-    const filtered = selectedFiles.filter(f => allowedTypes.includes(f.type));
+    const allowedTypes = ['text/markdown', 'text/x-markdown', 'text/plain', 'application/pdf'];
+    const allowedExtensions = {
+      md: 'text/markdown',
+      txt: 'text/plain',
+      pdf: 'application/pdf'
+    };
+
+    const filesWithMime = Array.from(e.target.files).map(file => {
+      let mimeType = file.type;
+      if (!allowedTypes.includes(mimeType)) {
+        const ext = file.name.split('.').pop().toLowerCase();
+        mimeType = allowedExtensions[ext] || '';
+      }
+      return { file, mimeType };
+    });
     
-    if (filtered.length === 0) {
+    if (filesWithMime.length === 0) {
       setMessage('No valid files selected. Please choose .md, .txt, or .pdf files.');
+      setIsUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      setUploadProgress({});
       return;
     }
 
     const updatedFiles = [];
 
-    for (const file of filtered) {
+    for (const { file, mimeType } of filesWithMime) {
       try {
         const hash = await sha256FromFile(file);
         if (!hash) {
@@ -233,7 +268,7 @@ function AdminPageComponent() {
             headers: { 'Content-Type': 'application/json' },
             data: {
               name: file.name,
-              mimeType: file.type,
+              mimeType,
               base64
           }
         });
@@ -264,15 +299,9 @@ function AdminPageComponent() {
       console.error('Error in handleFileChange:', error);
       setMessage(`Upload error: ${error.message || 'Unknown error'}`);
     } finally {
-      // Always reset the state, regardless of success or failure
       setIsUploading(false);
-      
-      // Force clear the file input by resetting its value
-      if (fileInputRef.current) {
-        fileInputRef.current.value = '';
-      }
-      
-      // Clear upload progress for all files
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      console.log('The fileInputRef.current.value was set to empty string.');
       setUploadProgress({});
     }
   };
@@ -593,7 +622,6 @@ function AdminPageComponent() {
             multiple
             onChange={handleFileChange}
             style={{ display: 'none' }}
-            key={Math.random()} // Force re-render to clear cache
           />
           
           {/* Visible button that triggers file input */}
@@ -622,60 +650,46 @@ function AdminPageComponent() {
           {supportingDocs.length > 0 && (
             <div>
               <h4>Uploaded Supporting Documents:</h4>
-              <ul>
+              <ul className="uploaded-files-list">
                 {supportingDocs.map((doc, i) => {
                   const isChecked = analysisGuid === doc.guid;
-                  console.log("Rendering doc", doc.name, "with guid", doc.guid, "| Checked:", isChecked);
-
                   return (
-                    <li key={doc.guid} style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                      <strong>{doc.name}</strong>
-                      {supportingDocs.length > 1 && doc.guid !== analysisGuid && (
-                        <Button
-                          variant="destructive"
-                          size="sm"
-                          onClick={async () => {
-                            try {
-                              const response = await proxyRequest(`${BACKEND_BASE}/ipfs/delete/${doc.guid}`, { method: 'DELETE' });
-                              if (response?.data?.success) {
-                                setSupportingDocs(prev => prev.filter(d => d.guid !== doc.guid));
-                              } else {
-                                showErrorDialog({ message: 'Failed to delete file', note: response?.data?.error || 'Unknown error' });
+                    <li className="uploaded-file-row" key={doc.guid}>
+                      <span className="file-name">{doc.name}</span>
+                      <span className="file-actions">
+                        {supportingDocs.length > 1 && doc.guid !== analysisGuid && (
+                          <Button
+                            variant="destructive"
+                            size="sm"
+                            onClick={async () => {
+                              try {
+                                const response = await proxyRequest(`${BACKEND_BASE}/ipfs/delete/${doc.guid}`, { method: 'DELETE' });
+                                if (response?.data?.success) {
+                                  setSupportingDocs(prev => prev.filter(d => d.guid !== doc.guid));
+                                } else {
+                                  showErrorDialog({ message: 'Failed to delete file', note: response?.data?.error || 'Unknown error' });
+                                }
+                              } catch (e) {
+                                showErrorDialog({ message: 'Error deleting file', note: e.message });
                               }
-                            } catch (e) {
-                              showErrorDialog({ message: 'Error deleting file', note: e.message });
-                            }
-                          }}
-                        >
-                          Delete
-                        </Button>
-                      )}
-                      <label style={{ marginLeft: '1rem', marginRight: '1rem' }}>
-                        <Switch
-                          name="analysis_file"
-                          checked={isChecked}
-                          onChange={() => {
-                            setAnalysisGuid(prev => {
-                              const newGuid = prev === doc.guid ? null : doc.guid;
-                              console.log('Switch toggled for', doc.name, '| Setting analysisGuid to:', newGuid);
-                              return newGuid;
-                            });
-                          }}
-                        />
-                        Use as Analysis File
-                      </label>
-                      {uploadProgress[doc.name] >= 0 && (
-                        <div style={{ width: '200px', background: '#eee', height: '6px', marginTop: '4px' }}>
-                          <div
-                            style={{
-                              width: `${uploadProgress[doc.name]}%`,
-                              background: '#4caf50',
-                              height: '100%',
-                              transition: 'width 0.3s ease'
+                            }}
+                          >
+                            Delete
+                          </Button>
+                        )}
+                      </span>
+                      <span className="file-analysis-switch">
+                        <label style={{ display: "flex", alignItems: "center", gap: "0.5em" }}>
+                          <Switch
+                            name="analysis_file"
+                            checked={isChecked}
+                            onChange={() => {
+                              setAnalysisGuid(prev => (prev === doc.guid ? null : doc.guid));
                             }}
                           />
-                        </div>
-                      )}
+                          Use as Analysis File
+                        </label>
+                      </span>
                     </li>
                   );
                 })}
