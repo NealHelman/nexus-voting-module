@@ -255,7 +255,7 @@ function VotingPageComponent() {
           <p>
             Your Trust Score: {(userTrust ?? 0).toLocaleString()} |{' '}
             Your Voting Weight: {(Number(userWeight) / 1e8).toLocaleString(undefined, { maximumFractionDigits: 2 })} |{' '}
-            Number of Votes You've Cast: {(userVotesCast ?? 0).toLocaleString()} 
+            Number of Votes You've Cast: {userVotesCast ? userVotesCast.toLocaleString() : '(loading...)'}
           </p>
         </div>
       </FieldSet>
@@ -349,6 +349,9 @@ function VotingPageComponent() {
           </Button>
         </div>
       </FieldSet>
+      <div style={{ textAlign: 'right', fontSize: 'small' }}>
+        © 2025, Neal Helman - Created with lots of help from AI.
+      </div>
     </Panel>
   );
 }

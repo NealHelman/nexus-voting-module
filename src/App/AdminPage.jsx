@@ -717,6 +717,9 @@ function AdminPageComponent() {
           </Button>
         </div>
       </div>
+      <div style={{ textAlign: 'right', fontSize: 'small' }}>
+        © 2025, Neal Helman - Created with lots of help from AI.
+      </div>
     </Panel>
   );
 }

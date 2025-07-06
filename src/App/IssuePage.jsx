@@ -3,14 +3,7 @@ import { proxyRequest } from 'nexus-module';
 import { decompressFromBase64 } from 'lz-string';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { Document, Page, pdfjs } from 'react-pdf';
 import nexusVotingService from '../services/nexusVotingService';
-import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs';
-
-pdfjs.GlobalWorkerOptions.workerSrc = new URL(
-  'pdfjs-dist/legacy/build/pdf.worker.min.mjs',
-  import.meta.url
-).toString();
 
 const BACKEND_BASE = 'http://65.20.79.65:4006';
 const React = NEXUS.libraries.React;
@@ -27,8 +20,8 @@ function base64ToUint8Array(base64) {
 
 function IssuePage() {
   const {
-    components: { Panel, Button, Dropdown, FieldSet },
-    utilities: { apiCall, confirm, showErrorDialog },
+    components: { Panel, Button, Dropdown, FieldSet, MultilineTextField },
+    utilities: { apiCall, confirm, showErrorDialog, showInfoDialog },
   } = NEXUS;
 
   const { address } = useParams();
@@ -39,7 +32,16 @@ function IssuePage() {
   const [issue, setIssue] = React.useState(null);
   const [userTrust, setUserTrust] = React.useState(0);
   const [userWeight, setUserWeight] = React.useState(0);
-  const [userVotesCast, setUserVotesCast] = React.useState(0);
+  const [userHasEnoughTrustToVote, setUserHasEnoughTrustToVote] = React.useState(false);
+  const [senderAddress, setSenderAddress] = React.useState('');
+  const [userVotesCastOverall, setUserVotesCastOverall] = React.useState(0);
+  const [userCurrentlyVotedOn, setuserCurrentlyVotedOn] = React.useState('');
+  const [userIneligibleToVote, setUserIneligibleToVote] = React.useState(false);
+  const [votingOver, setVotingOver] = React.useState(false);
+  const [jsonGuid, setJsonGuid] = React.useState('');
+  const [summaryPro, setSummaryPro] = React.useState('');
+  const [summaryCon, setSummaryCon] = React.useState('');
+  const [possibleOutcomes, setPossibleOutcomes] = React.useState('');
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState('');
   const [docsContent, setDocsContent] = React.useState({});
@@ -88,25 +90,38 @@ function IssuePage() {
       }
     };
 
-    const fetchVotesCast = async () => {
+    const fetchVotesCastOverall = async () => {
       try {
         const response = await proxyRequest(`${BACKEND_BASE}/votes-cast/${genesis}`, { method: 'GET' });
-        setUserVotesCast(response.data.votesCast || 0);
+        setUserVotesCastOverall(response.data.votesCast || 0);
       } catch (e) {
         console.error('Failed to fetch number of votes cast:', e);
-        setUserVotesCast(0);
+        setUserVotesCastOverall(0);
       }
     };
 
+    const fetchSenderAddress = async () => {
+      try {
+        const address = await apiCall('finance/get/account/address', {
+          name: 'default'
+        });
+        setSenderAddress(address);
+      } catch (e) {
+        console.error('Failed to fetch your default account address:', e);
+        setSenderAddress('');
+      }
+    };
+
+    fetchSenderAddress();
     checkTrust();
-    fetchVotesCast();
+    fetchVotesCastOverall();
   }, [genesis]);
 
   React.useEffect(() => {
-    const debugValues = { genesis, userTrust };
+    const debugValues = { genesis, userTrust, senderAddress };
     console.log('Updating window.myModuleDebug:', debugValues);
     window.myModuleDebug = debugValues;
-  }, [genesis, userTrust]);
+  }, [genesis, userTrust, senderAddress]);
 
   // Fetch the voting issue metadata
   React.useEffect(() => {
@@ -128,15 +143,88 @@ function IssuePage() {
         setError('Failed to load voting issue: ' + (e.message || e.toString()));
       }
       setLoading(false);
-      console.log('issue: ', issue);
     }
     if (issueId) fetchIssue();
   }, [issueId]);
+  
+  React.useEffect(() => {
+    const fetchSummaries = async () => {
+      try {
+        const { data } = await proxyRequest(`${BACKEND_BASE}/ipfs/fetch/${jsonGuid}`, { method: 'GET' });
+        console.log('fetchSummaries data: ', data);
+        try {
+          const jsonStr = atob(data.base64); // decode base64 to string
+          const parsed = JSON.parse(jsonStr);    // parse JSON
+          console.log('parsed: ', parsed);
+
+          setSummaryPro(parsed.summary_pro || '');
+          setSummaryCon(parsed.summary_con || '');
+          setPossibleOutcomes(parsed.possible_outcomes || '');
+        } catch (e) {
+          console.error('Failed to parse base64-encoded JSON:', e);
+        }
+      } catch (err) {
+        console.error('Failed to load vote asset:', err);
+      }
+    };
+
+    if (jsonGuid) fetchSummaries();
+  }, [jsonGuid]);
+  
+  React.useEffect(() => {
+    const canUserVote = async () => {
+      setUserHasEnoughTrustToVote(userTrust < issue.minTrust ? false : true);
+      const date = new Date();
+      const timestamp = date.getTime();
+      setVotingOver((timestamp / 1000) > issue.deadline ? true : false);
+    }
+    if (issue) canUserVote();
+  }, [issue, userTrust]);
+
+
+  React.useEffect(() => {
+    const fetchVotingOptionAddresses = async () => {
+      if (!issue.optionAccounts?.length) return;
+      const optionAddresses = [];
+      issue.optionAddresses = optionAddresses;
+      for (const slug of issue.optionAccounts) {
+        try {
+          const optionAccount = `${votingAuthoritySigchain}:${slug}`
+          console.log('optionAccount: ', optionAccount);
+          const address = await apiCall('finance/get/account/address', { name: optionAccount });
+          issue.optionAddresses.push(address);
+          
+          // Did the user vote for this option
+          const where =`results.contracts.OP=DEBIT AND results.contracts.from=${address} AND results.contracts.amount=0.000001`
+          const count = await apiCall('finance/transactions/account/timestamp/count', {
+            verbose: 'summary',
+            name: 'default',
+            where
+          });
+          const numberOfVotesCastForThisOption = count || 0;
+          issue.optionVotedOn = address;
+          if (address) setuserCurrentlyVotedOn(address);
+          if ((address && issue.vote_finality == 'one_time') || 1 == 1) setUserIneligibleToVote(true);;
+        } catch (e) {
+          showErrorDialog({
+            message: 'Unable to get voting option account addresses',
+            note: e.message
+          });
+          return;
+        }
+      }
+      console.log('issue after update: ', issue);
+    }
+    if (issue) fetchVotingOptionAddresses();
+  }, [issue]);
 
   // Fetch supporting docs from backend and decode
   React.useEffect(() => {
+    console.log('issue: ', issue);
     async function fetchDocs() {
       if (!issue?.supporting_docs?.length) return;
+      setJsonGuid(issue.issue_info_guid || null);
+      
       const docs = {};
       for (const doc of issue.supporting_docs) {
         try {
@@ -152,9 +240,6 @@ function IssuePage() {
           } else if (name.endsWith('.txt')) {
             content = atob(base64);
             type = 'text';
-          } else if (name.endsWith('.pdf')) {
-            content = base64ToUint8Array(base64);
-            type = 'pdf';
           } else {
             // fallback: treat as text, try to display, or offer download
             content = atob(base64);
@@ -172,21 +257,14 @@ function IssuePage() {
   
     // Cast Vote //
     React.useEffect(() => {
-      async function handleVote(opt) {
-        const senderAddress = await apiCall('finance/get/account/address', {
-          name: 'default'
-        });
-        
-        const voteSlug = await apiCall('assets/get/asset/name verbose=summary', { address: `${issue.issueId}` });
-
-        const where =`'results.owner={votingAuthorityGenesis} AND results.data=*{voteSlug.name}*'`;
-        const castVoteToThisAddress = await apiCall('register/list/finance:account', { where });
+      async function handleVote(idx) {
+        const castVoteToThisAddress = idx;
         
         let txidString = '';
         try {
           const response = await secureApiCall('finance/debit/account', {
-            from: senderAddress.address,
-            to: castVoteToThisAddress.address,
+            from: senderAddress,
+            to: castVoteToThisAddress,
             amount: voteCost
             }
           );
@@ -194,7 +272,7 @@ function IssuePage() {
           const result = response.data ?? response; // fallback if not Axios
           if (!result.success) {
             showErrorDialog({
-              message: 'NXS debit failed',
+              message: 'NXS voting debit failed',
               note: 'No txid returned.'
             });
             return;
@@ -222,20 +300,27 @@ function IssuePage() {
           <p>
             Your Trust Score: {(userTrust ?? 0).toLocaleString()} |{' '}
             Your Voting Weight: {(Number(userWeight) / 1e8).toLocaleString(undefined, { maximumFractionDigits: 2 })} |{' '}
-            Total Number of Votes You've Cast: {(userVotesCast ?? 0).toLocaleString()} 
+            Total Number of Votes You've Cast: {userVotesCastOverall ? userVotesCastOverall.toLocaleString() : '(loading...)'}
           </p>
         </div>
       </FieldSet>
 
       <div style={{ marginBottom: '1em' }}>
         <div style={{ marginBottom: '2rem', textAlign: 'center', fontSize: 'x-large' }}>
-          {issue.title}
+          <p>
+            <strong>{issue.title}</strong>
+            <br />
+            Voting is
+            {!votingOver ? (
+              <> still <span style={{ color: 'green' }}>OPEN</span>!</>
+            ) : (
+              <> <span style={{ color: 'red' }}>CLOSED</span>!</>
+            )}
+          </p>
         </div>
-        <strong>Description:</strong>
-        <div>
-          <ReactMarkdown remarkPlugins={[remarkGfm]}>
-            {issue.description || 'No description provided.'}
-          </ReactMarkdown>
+        <div style={{ marginBottom: '3rem' }}>
+          <label htmlFor="descriptionTextField" style={{ marginBottom: '0.25rem' }}>Description</label>
+          <MultilineTextField label="Description" value={issue.description} disabled />
         </div>
       </div>
       <div>
@@ -248,69 +333,51 @@ function IssuePage() {
         <strong>Organizer:</strong> {issue.organizer_name || 'Anonymous'}
       </div>
       <div>
-        <strong>Minimum Trust Required:</strong> {Number(issue.min_trust).toLocaleString()}
+        <strong>Organizer's Telegram:</strong> {issue.organizer_telegram || ''}
       </div>
-      <div style={{ margin: '1em 0' }}>
-        <strong>Summary - Pro Arguments:</strong>
-        <div>
-          <ReactMarkdown remarkPlugins={[remarkGfm]}>
-            {issue.summary_pro || 'No Summary - Pro Arguments provided.'}
-          </ReactMarkdown>
-        </div>
+      <div>
+        <strong>Minimum Trust Required to Vote:</strong> {Number(issue.min_trust).toLocaleString()}
       </div>
-      <div style={{ margin: '1em 0' }}>
-        <strong>Summary - Con Arguments:</strong>
-        <div>
-          <ReactMarkdown remarkPlugins={[remarkGfm]}>
-            {issue.summary_con || 'No Summary - Con Arguments provided.'}
-          </ReactMarkdown>
-        </div>
-      </div>
-      <div style={{ margin: '1em 0' }}>
-        <strong>Possible Outcomes:</strong>
-        <div>
-          <ReactMarkdown remarkPlugins={[remarkGfm]}>
-            {issue.possible_outcomes || 'No Possible Outcomes provided.'}
-          </ReactMarkdown>
-        </div>
-      </div>
-      {/* --- VOTE BUTTONS --- */}
-      <div style={{ textAlign: 'center' }}>
-        <p>Cast Your Vote</p>
-        <ul>
-          {(issue.optionAccounts || []).map((opt, idx) => (
-            <li key={opt}>
-              <Button disabled={userTrust < issue.minTrust} onClick={() => handleVote(opt)}>
-                Vote for {issue.option_labels?.[idx] || `Option ${idx + 1}`}
-              </Button>
-            </li>
-          ))}
-        </ul>
+      <div style={{ marginTop: '3rem' }}>
+          <label htmlFor="summaryProArgumentsTextField" style={{ marginBottom: '0.25rem' }}>Summary - Pro Arguments</label>
+          <MultilineTextField label="Summary - Pro Arguments" value={summaryPro} disabled />
+          <label htmlFor="summaryConArgumentsTextField" style={{ marginBottom: '0.25rem' }}>Summary - Con Arguments</label>
+          <MultilineTextField label="Summary - Con Arguments" value={summaryCon} disabled />
+          <label htmlFor="possibleOutcomesTextField" style={{ marginBottom: '0.25rem' }}>Possible Outcomes</label>
+          <MultilineTextField label="Possible Outcomes" value={possibleOutcomes} disabled />
       </div>
       {/* --- SUPPORTING DOCUMENTS --- */}
       {issue.supporting_docs?.length > 0 && (
         <FieldSet legend="Supporting Documents">
-          <ul>
+          <ul style={{ width: '100%', padding: 0, margin: 0, listStyle: 'none' }}>
             {issue.supporting_docs.map(doc => {
               const docData = docsContent[doc.guid];
               if (!docData) return <li key={doc.guid}>Loading document...</li>;
               if (docData.error) return <li key={doc.guid} style={{ color: 'red' }}>{docData.error}</li>;
               return (
-                <li key={doc.guid}>
+                <li key={doc.guid} style={{ width: '100%', boxSizing: 'border-box', marginBottom: '2em' }}>
                   <div><strong>{docData.name}</strong> (<a href={`${BACKEND_BASE}/ipfs/fetch/${doc.guid}`} download>Download</a>)</div>
                   {docData.type === 'markdown' && (
                     <ReactMarkdown remarkPlugins={[remarkGfm]}>{docData.content}</ReactMarkdown>
                   )}
                   {docData.type === 'text' && (
-                    <pre style={{ background: '#f3f3f3', padding: '1em' }}>{docData.content}</pre>
-                  )}
-                  {docData.type === 'pdf' && (
-                    <Document file={{ data: docData.content }}>
-                      <Page pageNumber={1} />
-                    </Document>
+                    <pre
+                      style={{
+                        background: '#fff',
+                        color: '#000',
+                        padding: '1em',
+                        marginLeft: 'auto',
+                        marginRight: 'auto',
+                        maxWidth: '90%',
+                        boxSizing: 'border-box',
+                        borderRadius: '2px',
+                        fontFamily: 'monospace',
+                        whiteSpace: 'pre-wrap'
+                      }}
+                    >{docData.content}</pre>
                   )}
                   {docData.type === 'unknown' && (
-                    <pre style={{ background: '#f9f9f9', padding: '1em', color: '#555' }}>
+                    <pre style={{ background: '#f9f9f9', color: 'black', padding: '1em', color: '#555' }}>
                       {docData.content}
                     </pre>
                   )}
@@ -320,6 +387,60 @@ function IssuePage() {
           </ul>
         </FieldSet>
       )}
+      {/* --- VOTE BUTTONS --- */}
+      <FieldSet legend="CAST YOUR VOTE">
+        <div style={{ textAlign: 'center' }}>
+          {!userHasEnoughTrustToVote && (
+            <p>You have insufficient trust to vote on this issue.<br />A trust score of {Number(issue.min_trust).toLocaleString()} is required.<br />Yours is currently {Number(userTrust).toLocaleString()}.</p>
+          )}
+          {votingOver && (
+            <p>Voting is over.<br />The deadline was new {Date(issue.deadline * 1000).toLocaleString()}.</p>
+          )}
+          {userIneligibleToVote && (
+            <p>You have already cast a vote on this issue, and it is set to One Time Voting.</p>
+          )}
+          <ul style={{ display: "inline-block", textAlign: "center", padding: 0, margin: 0, listStyle: "none" }}>
+            {(issue.optionAccounts || []).map((opt, idx) => (
+              <li key={opt} style={{ position: "relative", margin: "0.5em 0" }}>
+                <div style={{ display: "inline-block", position: "relative" }}>
+                  <Button 
+                    disabled={!userHasEnoughTrustToVote || votingOver || userIneligibleToVote } 
+                    onClick={() => handleVote(issue.optionAddresses[idx]?.address)}
+                  >
+                    Vote for {issue.option_labels?.[idx] || `Option ${idx + 1}`}
+                  </Button>
+                  {/* Indicator if voted */}
+                  {issue.optionVotedOn && 
+                    issue.optionAddresses[idx]?.address === issue.optionVotedOn.address && (
+                      <span style={{
+                        position: "absolute",
+                        left: "105%", // or adjust as needed
+                        top: "50%",
+                        transform: "translateY(-50%)",
+                        color: "green",
+                        fontWeight: "bold",
+                        fontSize: "0.95em",
+                        whiteSpace: "nowrap",
+                      }}>
+                        (You voted on this one)
+                      </span>
+                  )}
+                </div>
+              </li>
+            ))}
+          </ul>
+        </div>
+      </FieldSet>
+      <div style={{ textAlign: 'center' }}>
+        <Button>
+          <Link to="/" style={{ textDecoration: 'none', color: 'inherit' }}>
+            Return to Voting Issue List Page
+          </Link>
+        </Button>
+      </div>
+      <div style={{ textAlign: 'right', fontSize: 'small' }}>
+        © 2025, Neal Helman - Created with lots of help from AI.
+      </div>
     </Panel>
   );
 }
