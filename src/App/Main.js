@@ -2,6 +2,7 @@ import styled from '@emotion/styled';
 import { HashRouter, Routes, Route } from 'react-router-dom';
 import VotingPage from './VotingPage';
 import AdminPage from './AdminPage';
+import IssuePage from './IssuePage';
 console.log('AdminPage import:', AdminPage)
 import { useSelector, useDispatch } from 'react-redux';
 import {
@@ -29,6 +30,7 @@ export default function Main() {
       <Routes>
         <Route path="/" element={<VotingPage />} />
         <Route path="/admin" element={<AdminPage />} />
+        <Route path="/issue" element={<IssuePage />} />
       </Routes>
     </HashRouter>
   );

@@ -5,6 +5,7 @@ import { Link } from 'react-router-dom';
 import { decompressFromBase64  } from 'lz-string';
 import nexusVotingService from '../services/nexusVotingService';
 import AdminPage from './AdminPage';
+import IssuePage from './IssuePage';
 
 const BACKEND_BASE = 'http://65.20.79.65:4006';
 const React = NEXUS.libraries.React;
@@ -59,7 +60,7 @@ function VotingPageComponent() {
   }, []);
     
   React.useEffect(() => {
-    if (!genesis) return; // 🚨 wait for genesis to be set
+    if (!genesis) return;
 
     const checkSubscriptionStatus = async () => {
       try {
@@ -98,7 +99,7 @@ function VotingPageComponent() {
     checkSubscriptionStatus();
     checkTrust();
     fetchVotesCast();
-  }, [genesis, minTrust]); // ✅ depend on genesis, not dispatch
+  }, [genesis, minTrust]);
 
   const handleSubscriptionToggle = async () => {
     const email = await window.getInput('Enter your email for voting issue announcements:');
@@ -196,7 +197,7 @@ function VotingPageComponent() {
   };
 
   return (
-    <Panel title="Nexus Community On-Chain Voting - Issue Display" icon={{ url: 'voting.svg', id: 'icon' }}>
+    <Panel title="Nexus Community On-Chain Voting - Issues Available" icon={{ url: 'voting.svg', id: 'icon' }}>
       <FieldSet style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1rem' }}>
         <div style={{ display: 'flex', gap: '1rem', marginBottom: '1rem', marginTop: '1rem' }}>
           <label htmlFor="filterSelect" style={{ marginBottom: 'auto', marginTop: 'auto', textAlign: 'center' }}>
@@ -299,7 +300,7 @@ function VotingPageComponent() {
                       </div>
 
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', minWidth: '130px' }}>
-                        <Link to={`/issue/${vote.address}`}>
+                        <Link to={`/issue?issueId=${vote.address}`}>
                           <Button style={{ width: '100%' }}>Details/Vote</Button>
                         </Link>
                         {vote.creatorGenesis === genesis && (
