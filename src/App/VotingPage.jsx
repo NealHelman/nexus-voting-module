@@ -161,7 +161,7 @@ function VotingPageComponent() {
         for (const vote of validVotes) {
           try {
             const response  = await proxyRequest(`${BACKEND_BASE}/weighted-results/${vote.slug}`, { method: 'GET' });
-            console.log('response: ', response);
+            console.log('weighted-results response: ', response);
             counts[vote.slug] = response.data.countResult;
             voteCounts[vote.slug] = response.data.totalUniqueVotes || 0;
           } catch (err) {
@@ -195,59 +195,92 @@ function VotingPageComponent() {
     setSortField(field);
     setCurrentPage(1);
   };
+  
+  const handleRefresh = () => {
+    window.location.reload();
+  };
+
 
   return (
     <Panel title="Nexus Community On-Chain Voting - Issues Available" icon={{ url: 'voting.svg', id: 'icon' }}>
-      <FieldSet style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1rem' }}>
-        <div style={{ display: 'flex', gap: '1rem', marginBottom: '1rem', marginTop: '1rem' }}>
-          <label htmlFor="filterSelect" style={{ marginBottom: 'auto', marginTop: 'auto', textAlign: 'center' }}>
-          Status&nbsp;Filter
-          <Dropdown label="Filter">
-            <select value={filter} onChange={e => setFilter(e.target.value)}>
-              <option value="all">All</option>
-              <option value="active">Active</option>
-              <option value="closed">Closed</option>
-              <option value="mine">Just Mine</option>
-            </select>
-          </Dropdown>
-          </label>
-        <label htmlFor="sortBy" style={{ marginBottom: 'auto', marginTop: 'auto', textAlign: 'center' }}>
-          Sort&nbsp;By
-          <Dropdown label="SortBy">
-          <select value={sortField} onChange={e => handleSortChange(e.target.value)} style={{ marginLeft: '0.5rem' }}>
-            <option value="created">Created</option>
-            <option value="title">Title</option>
-            <option value="deadline">Deadline</option>
-          </select>
-          </Dropdown>
-        </label>
-        <label htmlFor="direction" style={{ marginBottom: 'auto', marginTop: 'auto', textAlign: 'center' }}>
-          Sort Direction
-          <Dropdown label="SortDirection">
-          <select value={sortDirection} onChange={e => setSortDirection(e.target.value)} style={{ marginLeft: '0.5rem' }}>
-            <option value="asc">Ascending</option>
-            <option value="desc">Descending</option>
-          </select>
-          </Dropdown>
-        </label>	  
-        <label htmlFor="pageSize" style={{ marginBottom: 'auto', marginTop: 'auto', textAlign: 'center' }}>
-          Page Size:
-          <Dropdown label="PageSize">
-          <select value={votesPerPage} onChange={handlePageSizeChange} style={{ marginLeft: '0.5rem' }}>
-              <option value="3">3</option>
-              <option value="5">5</option>
-              <option value="10">10</option>
-              <option value="25">25</option>
-              <option value="50">50</option>
-          </select>
-          </Dropdown>
-        </label>
+      <FieldSet style={{ position: 'relative', padding: '2em 1em 1em 1em' }}>
+        {/* Top-right Refresh Icon */}
+        <div style={{
+          position: 'absolute',
+          top: '1em',
+          right: '1em',
+          zIndex: 2,
+          cursor: 'pointer'
+        }}>
+          <Link onClick={handleRefresh}>
+            <img src='refresh.svg' height='32px' /> 
+          </Link>
         </div>
-        <div style={{ display: 'flex', gap: '1rem', marginBottom: '1rem', marginTop: '1rem' }}>
-          <Button onClick={handleSubscriptionToggle}>
-            {subscribed ? 'Unsubscribe from Announcements' : 'Subscribe to Announcements'}
-          </Button>
-          {canAccessAdmin && <Button><Link to="/admin" style={{ textDecoration: 'none', color: 'inherit' }}>Enter a New Issue to Vote On</Link></Button>}
+        {/* Centered Content */}
+        <div style={{
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center'
+        }}>
+          <div style={{
+            display: 'flex',
+            gap: '2rem',
+            marginBottom: '2em',
+            justifyContent: 'center'
+          }}>
+            <label htmlFor="filterSelect" style={{ marginBottom: 'auto', marginTop: 'auto', textAlign: 'center' }}>
+            Status&nbsp;Filter
+            <Dropdown label="Filter">
+              <select value={filter} onChange={e => setFilter(e.target.value)}>
+                <option value="all">All</option>
+                <option value="active">Active</option>
+                <option value="closed">Closed</option>
+                <option value="mine">Just Mine</option>
+              </select>
+            </Dropdown>
+            </label>
+          <label htmlFor="sortBy" style={{ marginBottom: 'auto', marginTop: 'auto', textAlign: 'center' }}>
+            Sort&nbsp;By
+            <Dropdown label="SortBy">
+            <select value={sortField} onChange={e => handleSortChange(e.target.value)} style={{ marginLeft: '0.5rem' }}>
+              <option value="created">Created</option>
+              <option value="title">Title</option>
+              <option value="deadline">Deadline</option>
+            </select>
+            </Dropdown>
+          </label>
+          <label htmlFor="direction" style={{ marginBottom: 'auto', marginTop: 'auto', textAlign: 'center' }}>
+            Sort Direction
+            <Dropdown label="SortDirection">
+            <select value={sortDirection} onChange={e => setSortDirection(e.target.value)} style={{ marginLeft: '0.5rem' }}>
+              <option value="asc">Ascending</option>
+              <option value="desc">Descending</option>
+            </select>
+            </Dropdown>
+          </label>	  
+          <label htmlFor="pageSize" style={{ marginBottom: 'auto', marginTop: 'auto', textAlign: 'center' }}>
+            Page Size:
+            <Dropdown label="PageSize">
+            <select value={votesPerPage} onChange={handlePageSizeChange} style={{ marginLeft: '0.5rem' }}>
+                <option value="3">3</option>
+                <option value="5">5</option>
+                <option value="10">10</option>
+                <option value="25">25</option>
+                <option value="50">50</option>
+            </select>
+            </Dropdown>
+          </label>
+          </div>
+          <div style={{
+            display: 'flex',
+            gap: '2rem',
+            justifyContent: 'center'
+          }}>
+            <Button onClick={handleSubscriptionToggle}>
+              {subscribed ? 'Unsubscribe from Announcements' : 'Subscribe to Announcements'}
+            </Button>
+            {canAccessAdmin && <Button><Link to="/admin" style={{ textDecoration: 'none', color: 'inherit' }}>Enter a New Issue to Vote On</Link></Button>}
+          </div>
         </div>
       </FieldSet>
       <FieldSet legend='Your Voting Power' style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1rem' }}>
@@ -255,81 +288,90 @@ function VotingPageComponent() {
           <p>
             Your Trust Score: {(userTrust ?? 0).toLocaleString()} |{' '}
             Your Voting Weight: {(Number(userWeight) / 1e8).toLocaleString(undefined, { maximumFractionDigits: 2 })} |{' '}
-            Number of Votes You've Cast: {userVotesCast ? userVotesCast.toLocaleString() : '(loading...)'}
+            Number of Votes You've Cast:
+            {!userVotesCast ? (
+              <> <span style={{ color: 'red' }}>(loading...)</span></>
+            ) : (
+              <> {userVotesCast.toLocaleString()} </>
+            )}
           </p>
         </div>
       </FieldSet>
       <FieldSet legend='Issues (Filtered & Sorted)' style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1rem' }}>
         <div style={{ display: 'flex', justifyContent: 'center', gap: '1rem', marginBottom: '1rem', marginTop: '1rem' }}>
-          {loading ? <p>Loading...</p> : (() => {
-            const filteredVotes = voteList
-              .filter(vote => vote.min_trust === undefined || userTrust >= vote.min_trust)
-              .filter(vote => {
-                const now = Date.now() / 1000;
-                if (filter === 'active') return !vote.deadline || vote.deadline > now;
-                if (filter === 'closed') return vote.deadline && vote.deadline <= now;
-                return true;
-              })
+          {loading ? (
+            <span style={{ color: 'red' }}>Loading...</span>
+          ) : (
+            (() => {
+              const filteredVotes = voteList
+                .filter(vote => vote.min_trust === undefined || userTrust >= vote.min_trust)
+                .filter(vote => {
+                  const now = Date.now() / 1000;
+                  if (filter === 'active') return !vote.deadline || vote.deadline > now;
+                  if (filter === 'closed') return vote.deadline && vote.deadline <= now;
+                  return true;
+                })
 
-            if (filteredVotes.length === 0) {
-              return <p>No voting issues to display for this filter.</p>;
-            }
+              if (filteredVotes.length === 0) {
+                return <p>No voting issues to display for this filter.</p>;
+              }
 
-            return (
-              <ul>
-                {filteredVotes.map((vote) => (
-                  <li key={vote.address}>
-                    <div
-                      key={vote.slug}
-                      style={{
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'flex-start',
-                        gap: '1rem',
-                        padding: '1rem 0',
-                        borderBottom: '1px solid #ccc'
-                      }}
-                    >
-                      <div style={{ flex: 1 }}>
-                        <div style={{ fontWeight: 'bold', marginBottom: '0.25rem', color: '#00b7fa' }}>{vote.title}</div>
-                        <div style={{ fontSize: '0.9rem', lineHeight: '1.4' }}>
-                          <div>Created On: {new Date(vote.created_at * 1000).toLocaleDateString()}</div>
-                          <div>Deadline: {new Date(vote.deadline * 1000).toLocaleDateString()}</div>
-                          <div>Number of Votes Cast: {vote.voteCount?.toLocaleString() ?? '0'}</div>
+              return (
+                <ul>
+                  {filteredVotes.map((vote) => (
+                    <li key={vote.address}>
+                      <div
+                        key={vote.slug}
+                        style={{
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'flex-start',
+                          gap: '1rem',
+                          padding: '1rem 0',
+                          borderBottom: '1px solid #ccc'
+                        }}
+                      >
+                        <div style={{ flex: 1 }}>
+                          <div style={{ fontWeight: 'bold', marginBottom: '0.25rem', color: '#00b7fa' }}>{vote.title}</div>
+                          <div style={{ fontSize: '0.9rem', lineHeight: '1.4' }}>
+                            <div>Created On: {new Date(vote.created_at * 1000).toLocaleDateString()}</div>
+                            <div>Deadline: {new Date(vote.deadline * 1000).toLocaleDateString()}</div>
+                            <div>Number of Votes Cast: {vote.voteCount?.toLocaleString() ?? '0'}</div>
+                          </div>
+                        </div>
+
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', minWidth: '130px' }}>
+                          <Link to={`/issue?issueId=${vote.address}`}>
+                            <Button style={{ width: '100%' }}>Details/Vote</Button>
+                          </Link>
+                          {vote.creatorGenesis === genesis && (
+                            <Link to={`/admin?edit=${vote.address}`}>
+                              <Button style={{ width: '100%' }}>Edit</Button>
+                            </Link>
+                          )}
                         </div>
                       </div>
+                      {vote.optionAccounts && (
+                        <ul style={{ fontSize: '0.9rem' }}>
+                          {vote.optionAccounts.map((opt, idx) => {
+                            const label = vote.option_labels?.[idx] || `Option ${idx + 1}`;
+                            const weightedCount = weightedVoteCounts?.[vote.slug]?.[opt] ?? 0;
 
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', minWidth: '130px' }}>
-                        <Link to={`/issue?issueId=${vote.address}`}>
-                          <Button style={{ width: '100%' }}>Details/Vote</Button>
-                        </Link>
-                        {vote.creatorGenesis === genesis && (
-                          <Link to={`/admin?edit=${vote.address}`}>
-                            <Button style={{ width: '100%' }}>Edit</Button>
-                          </Link>
-                        )}
-                      </div>
-                    </div>
-                    {vote.optionAccounts && (
-                      <ul style={{ fontSize: '0.9rem' }}>
-                        {vote.optionAccounts.map((opt, idx) => {
-                          const label = vote.option_labels?.[idx] || `Option ${idx + 1}`;
-                          const weightedCount = weightedVoteCounts?.[vote.slug]?.[opt] ?? 0;
-
-                          return (
-                            <li key={opt}>
-                              <strong>{label}</strong>: {(Number(weightedCount) / 1e8).toLocaleString(undefined, { maximumFractionDigits: 2 })} weighted NXS
-                            </li>
-                          );
-                        })}
-                      </ul>
-                    )}
-                    <hr />
-                  </li>
-                ))}
-              </ul>
-            );
-          })()}
+                            return (
+                              <li key={opt}>
+                                <strong>{label}</strong>: {(Number(weightedCount) / 1e8).toLocaleString(undefined, { maximumFractionDigits: 2 })} weighted NXS
+                              </li>
+                            );
+                          })}
+                        </ul>
+                      )}
+                      <hr />
+                    </li>
+                  ))}
+                </ul>
+              );
+            })()
+          )}
         </div>
         <div style={{ display: 'flex', justifyContent: 'center', gap: '1rem', marginTop: '1rem', flexWrap: 'wrap' }}>
           <Button onClick={() => setCurrentPage(p => Math.max(p - 1, 1))} disabled={currentPage === 1}>

@@ -152,7 +152,7 @@ function AdminPageComponent() {
         try {
           const data = await apiCall('assets/get/asset', { address: editingId });
           const config = JSON.parse(decompressFromBase64(data.config));
-          console.log('config: ', config);
+          console.log('fetchAsset::config: ', config);
 
           setTitle(data.title);
           setDescription(config.description);
@@ -202,6 +202,10 @@ function AdminPageComponent() {
     }
   }, [jsonGuid, editingId]);
   
+  React.useEffect(() => {
+    console.log('supportingDocs updated: ', supportingDocs);
+  }, [supportingDocs]);
+  
   const handleFileChange = async (e) => {
     console.log('handleFileChange called with files:', e.target.files?.length);
     
@@ -215,86 +219,88 @@ function AdminPageComponent() {
     setIsUploading(true);
     
     try {
-    const selectedFiles = Array.from(e.target.files);
-    const allowedTypes = ['text/markdown', 'text/x-markdown', 'text/plain', 'application/pdf'];
-    const allowedExtensions = {
-      md: 'text/markdown',
-      txt: 'text/plain',
-      pdf: 'application/pdf'
-    };
+      const selectedFiles = Array.from(e.target.files);
+      const allowedTypes = ['text/markdown', 'text/x-markdown', 'text/plain', 'application/pdf'];
+      const allowedExtensions = {
+        md: 'text/markdown',
+        txt: 'text/plain',
+        pdf: 'application/pdf'
+      };
 
-    const filesWithMime = Array.from(e.target.files).map(file => {
-      let mimeType = file.type;
-      if (!allowedTypes.includes(mimeType)) {
-        const ext = file.name.split('.').pop().toLowerCase();
-        mimeType = allowedExtensions[ext] || '';
+      const filesWithMime = Array.from(e.target.files).map(file => {
+        let mimeType = file.type;
+        if (!allowedTypes.includes(mimeType)) {
+          const ext = file.name.split('.').pop().toLowerCase();
+          mimeType = allowedExtensions[ext] || '';
+        }
+        return { file, mimeType };
+      });
+      
+      if (filesWithMime.length === 0) {
+        setMessage('No valid files selected. Please choose .md, .txt, or .pdf files.');
+        setIsUploading(false);
+        if (fileInputRef.current) fileInputRef.current.value = '';
+        setUploadProgress({});
+        return;
       }
-      return { file, mimeType };
-    });
-    
-    if (filesWithMime.length === 0) {
-      setMessage('No valid files selected. Please choose .md, .txt, or .pdf files.');
-      setIsUploading(false);
-      if (fileInputRef.current) fileInputRef.current.value = '';
-      setUploadProgress({});
-      return;
-    }
 
-    const updatedFiles = [];
+      const updatedFiles = [];
 
-    for (const { file, mimeType } of filesWithMime) {
-      try {
-        const hash = await sha256FromFile(file);
-        if (!hash) {
-          onError(`Could not hash ${file.name}. Skipping.`);
-          continue;
-        }
-        
-        console.log(`Hash for ${file.name}: ${hash}`);
-
-        const reader = new FileReader();
-        const base64 = await new Promise((resolve, reject) => {
-          reader.onload = () => resolve(reader.result.split(',')[1]);
-          reader.onerror = () => reject('FileReader failed');
-          reader.readAsDataURL(file);
-        });
-
-        setUploadProgress(prev => ({ ...prev, [file.name]: 0 }));
-
-        const response = await proxyRequest(
-          `${BACKEND_BASE}/ipfs/upload`,
-          {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            data: {
-              name: file.name,
-              mimeType,
-              base64
+      for (const { file, mimeType } of filesWithMime) {
+        try {
+          const hash = await sha256FromFile(file);
+          if (!hash) {
+            onError(`Could not hash ${file.name}. Skipping.`);
+            continue;
           }
-        });
-        
-        setUploadProgress(prev => ({ ...prev, [file.name]: 100 }));
-        
-        if (!response?.data?.success || !response.data.guid) {
-          throw new Error(`Invalid response from backend for ${file.name}`);
-        }
+          
+          console.log(`Hash for ${file.name}: ${hash}`);
 
-        console.log(`Successfully uploaded ${file.name} with guid: ${response.data.guid}`);
-        updatedFiles.push({ name: file.name, guid: response.data.guid, sha256: hash });
+          const reader = new FileReader();
+          const base64 = await new Promise((resolve, reject) => {
+            reader.onload = () => resolve(reader.result.split(',')[1]);
+            reader.onerror = () => reject('FileReader failed');
+            reader.readAsDataURL(file);
+          });
 
+          setUploadProgress(prev => ({ ...prev, [file.name]: 0 }));
+
+          const response = await proxyRequest(
+            `${BACKEND_BASE}/ipfs/upload`,
+            {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              data: {
+                name: file.name,
+                mimeType,
+                base64
+            }
+          });
+          
+          setUploadProgress(prev => ({ ...prev, [file.name]: 100 }));
+          
+          if (!response?.data?.success || !response.data.guid) {
+            throw new Error(`Invalid response from backend for ${file.name}`);
+          }
+
+          console.log(`Successfully uploaded ${file.name} with guid: ${response.data.guid}`);
+          updatedFiles.push({ name: file.name, guid: response.data.guid, sha256: hash });
         } catch (e) {
           console.error(`Failed to upload ${file.name}:`, e);
           setMessage(`Upload failed for ${file.name}: ${e.message || 'Unknown error'}`);
         }
       }
-      
       if (updatedFiles.length > 0) {
-        setSupportingDocs(prev => [...prev, ...updatedFiles]);
+        setSupportingDocs(prev => {
+          const existingGuids = new Set(prev.map(d => d.guid));
+          // Avoid duplicates
+          const onlyNew = updatedFiles.filter(doc => !existingGuids.has(doc.guid));
+          return [...prev, ...onlyNew];
+        });
         setMessage(`${updatedFiles.length} file(s) uploaded successfully.`);
       } else {
         setMessage('No files were uploaded successfully.');
       }
-
     } catch (error) {
       console.error('Error in handleFileChange:', error);
       setMessage(`Upload error: ${error.message || 'Unknown error'}`);
@@ -355,7 +361,7 @@ function AdminPageComponent() {
       ...doc,
       is_analysis: doc.guid === analysisGuid
     }));
-
+    
     const config = {
       description,
       option_labels: optionLabels,
@@ -368,6 +374,8 @@ function AdminPageComponent() {
       created_at: createdAt || Math.floor(Date.now() / 1000),
       supporting_docs: flaggedSupportingDocs
     };
+    
+    console.log('pre-update config: ', config);
 
     const compressed = compressToBase64(JSON.stringify(config));
     const assetConfig = {
@@ -614,11 +622,11 @@ function AdminPageComponent() {
         </FieldSet>
         
         <FieldSet legend="Supporting Documents">
-          <p>Attach a markdown, text, or PDF file to serve as the primary analysis document. You may also attach additional supporting documents.</p>
+          <p>Attach a markdown, text, PDF, or Word file to serve as the primary analysis document. You may also attach additional supporting documents.</p>
           <input
             ref={fileInputRef}
             type="file"
-            accept=".md,.txt,.pdf"
+            accept=".md,.txt,.pdf, .doc, .docx"
             multiple
             onChange={handleFileChange}
             style={{ display: 'none' }}

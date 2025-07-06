@@ -21,7 +21,7 @@ function base64ToUint8Array(base64) {
 function IssuePage() {
   const {
     components: { Panel, Button, Dropdown, FieldSet, MultilineTextField },
-    utilities: { apiCall, confirm, showErrorDialog, showInfoDialog },
+    utilities: { apiCall, secureApiCall, confirm, showErrorDialog, showSuccessDialog, showInfoDialog },
   } = NEXUS;
 
   const { address } = useParams();
@@ -37,6 +37,8 @@ function IssuePage() {
   const [userVotesCastOverall, setUserVotesCastOverall] = React.useState(0);
   const [userCurrentlyVotedOn, setuserCurrentlyVotedOn] = React.useState('');
   const [userIneligibleToVote, setUserIneligibleToVote] = React.useState(false);
+  const [optionAddresses, setOptionAddresses] = React.useState([]);
+  const [optionVotedOn, setOptionVotedOn] = React.useState(null);
   const [votingOver, setVotingOver] = React.useState(false);
   const [jsonGuid, setJsonGuid] = React.useState('');
   const [summaryPro, setSummaryPro] = React.useState('');
@@ -50,6 +52,42 @@ function IssuePage() {
   const [searchParams] = useSearchParams();
   const issueId = searchParams.get('issueId');
   const panelTitle = "Nexus Community On-Chain Voting - Issue Details & Voting"
+
+  function base64ToBlob(base64, mimeType='application/octet-stream') {
+    const byteCharacters = atob(base64);
+    const byteArrays = [];
+    for (let offset = 0; offset < byteCharacters.length; offset += 512) {
+      const slice = byteCharacters.slice(offset, offset + 512);
+      const byteNumbers = new Array(slice.length);
+      for (let i = 0; i < slice.length; i++) {
+        byteNumbers[i] = slice.charCodeAt(i);
+      }
+      byteArrays.push(new Uint8Array(byteNumbers));
+    }
+    return new Blob(byteArrays, { type: mimeType });
+  }
+  
+  function handleDownload(name, base64) {
+    const blob = base64ToBlob(base64, getMimeTypeFromName(name));
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = name;
+    document.body.appendChild(link);
+    link.click();
+    setTimeout(() => {
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    }, 100);
+  }
+
+  function getMimeTypeFromName(name) {
+    if (name.endsWith('.pdf')) return 'application/pdf';
+    if (name.endsWith('.doc')) return 'application/msword';
+    if (name.endsWith('.docx')) return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+    // add more as needed
+    return 'application/octet-stream';
+  }
 
   React.useEffect(() => {
     nexusVotingService.getProtectedValues().then(({ data }) => {
@@ -105,7 +143,7 @@ function IssuePage() {
         const address = await apiCall('finance/get/account/address', {
           name: 'default'
         });
-        setSenderAddress(address);
+        setSenderAddress(address.address);
       } catch (e) {
         console.error('Failed to fetch your default account address:', e);
         setSenderAddress('');
@@ -181,19 +219,26 @@ function IssuePage() {
     if (issue) canUserVote();
   }, [issue, userTrust]);
 
-
+  React.useEffect(() => {
+    setOptionAddresses([]);
+    setOptionVotedOn(null);
+    setUserIneligibleToVote(false);
+    setuserCurrentlyVotedOn('');
+  }, [issue]);
+  
   React.useEffect(() => {
     const fetchVotingOptionAddresses = async () => {
-      if (!issue.optionAccounts?.length) return;
-      const optionAddresses = [];
-      issue.optionAddresses = optionAddresses;
+      if (!issue?.optionAccounts?.length) return;
+      const newOptionAddresses = [];
+      let votedOn = null;
+      let ineligible = false;
+
       for (const slug of issue.optionAccounts) {
         try {
-          const optionAccount = `${votingAuthoritySigchain}:${slug}`
-          console.log('optionAccount: ', optionAccount);
+          const optionAccount = `${votingAuthoritySigchain}:${slug}`;
           const address = await apiCall('finance/get/account/address', { name: optionAccount });
-          issue.optionAddresses.push(address);
-          
+          newOptionAddresses.push(address);
+
           // Did the user vote for this option
           const where =`results.contracts.OP=DEBIT AND results.contracts.from=${address} AND results.contracts.amount=0.000001`
           const count = await apiCall('finance/transactions/account/timestamp/count', {
@@ -201,10 +246,11 @@ function IssuePage() {
             name: 'default',
             where
           });
-          const numberOfVotesCastForThisOption = count || 0;
-          issue.optionVotedOn = address;
-          if (address) setuserCurrentlyVotedOn(address);
-          if ((address && issue.vote_finality == 'one_time') || 1 == 1) setUserIneligibleToVote(true);;
+          if (count > 0) {
+            votedOn = address;
+            setuserCurrentlyVotedOn(address);
+            if (issue.vote_finality === 'one_time') ineligible = true;
+          }
         } catch (e) {
           showErrorDialog({
             message: 'Unable to get voting option account addresses',
@@ -213,10 +259,12 @@ function IssuePage() {
           return;
         }
       }
-      console.log('issue after update: ', issue);
-    }
+      setOptionAddresses(newOptionAddresses);
+      setOptionVotedOn(votedOn);
+      setUserIneligibleToVote(ineligible);
+    };
     if (issue) fetchVotingOptionAddresses();
-  }, [issue]);
+  }, [issue, votingAuthoritySigchain]);
 
   // Fetch supporting docs from backend and decode
   React.useEffect(() => {
@@ -255,39 +303,44 @@ function IssuePage() {
     fetchDocs();
   }, [issue]);
   
-    // Cast Vote //
-    React.useEffect(() => {
-      async function handleVote(idx) {
-        const castVoteToThisAddress = idx;
-        
-        let txidString = '';
-        try {
-          const response = await secureApiCall('finance/debit/account', {
-            from: senderAddress,
-            to: castVoteToThisAddress,
-            amount: voteCost
-            }
-          );
-
-          const result = response.data ?? response; // fallback if not Axios
-          if (!result.success) {
-            showErrorDialog({
-              message: 'NXS voting debit failed',
-              note: 'No txid returned.'
-            });
-            return;
-          }
-          txidString = result.txid.toString();
-          console.log('voting txidString: ', txidString);
-        } catch (e) {
-          showErrorDialog({
-            message: 'Error during sending voting issue creation fee',
-            note: e.message
-          });
-          return;
+  // Cast Vote //
+  const handleVote = async (address) => {
+    console.log('address: ', address);
+    let txidString = '';
+    try {
+      const response = await secureApiCall('finance/debit/account', {
+        from: senderAddress,
+        to: address.address,
+        amount: voteCost,
+        reference: userWeight
         }
+      );
+      
+      setOptionVotedOn(address);
+
+      const result = response.data ?? response; // fallback if not Axios
+      if (response.success) showSuccessDialog({ 
+        message: 'Success!',
+        note: 'You voted!'
+      });
+
+      if (!result.success) {
+        showErrorDialog({
+          message: 'NXS voting debit failed',
+          note: 'No txid returned.'
+        });
+        return;
       }
-  }, []);
+      txidString = result.txid.toString();
+      console.log('voting txidString: ', txidString);
+    } catch (e) {
+      showErrorDialog({
+        message: 'Error during sending voting issue creation fee',
+        note: e.message
+      });
+      return;
+    }
+  };
   
   if (loading) return <Panel title={panelTitle} icon={{ url: 'voting.svg', id: 'icon' }}><p>Loading voting issue...</p></Panel>;
   if (error) return <Panel title={panelTitle} icon={{ url: 'voting.svg', id: 'icon' }}><p style={{ color: 'red' }}>{error}</p></Panel>;
@@ -300,7 +353,12 @@ function IssuePage() {
           <p>
             Your Trust Score: {(userTrust ?? 0).toLocaleString()} |{' '}
             Your Voting Weight: {(Number(userWeight) / 1e8).toLocaleString(undefined, { maximumFractionDigits: 2 })} |{' '}
-            Total Number of Votes You've Cast: {userVotesCastOverall ? userVotesCastOverall.toLocaleString() : '(loading...)'}
+            Total Number of Votes You've Cast: 
+            {!userVotesCastOverall ? (
+              <> <span style={{ color: 'red' }}>(loading...)</span></>
+            ) : (
+              <> userVotesCastOverall.toLocaleString() </>
+            )}
           </p>
         </div>
       </FieldSet>
@@ -356,30 +414,31 @@ function IssuePage() {
               if (docData.error) return <li key={doc.guid} style={{ color: 'red' }}>{docData.error}</li>;
               return (
                 <li key={doc.guid} style={{ width: '100%', boxSizing: 'border-box', marginBottom: '2em' }}>
-                  <div><strong>{docData.name}</strong> (<a href={`${BACKEND_BASE}/ipfs/fetch/${doc.guid}`} download>Download</a>)</div>
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      gap: '1em',
+                      width: '100%',
+                    }}
+                  >
+                    <strong>{docData.name}</strong>
+                    <Button
+                      onClick={() => handleDownload(docData.name, docData.base64)}
+                      style={{ marginLeft: 'auto', whiteSpace: 'nowrap' }}
+                    >
+                      Download
+                    </Button>
+                  </div>
                   {docData.type === 'markdown' && (
                     <ReactMarkdown remarkPlugins={[remarkGfm]}>{docData.content}</ReactMarkdown>
                   )}
                   {docData.type === 'text' && (
-                    <pre
-                      style={{
-                        background: '#fff',
-                        color: '#000',
-                        padding: '1em',
-                        marginLeft: 'auto',
-                        marginRight: 'auto',
-                        maxWidth: '90%',
-                        boxSizing: 'border-box',
-                        borderRadius: '2px',
-                        fontFamily: 'monospace',
-                        whiteSpace: 'pre-wrap'
-                      }}
-                    >{docData.content}</pre>
+                    <pre>{docData.content}</pre>
                   )}
                   {docData.type === 'unknown' && (
-                    <pre style={{ background: '#f9f9f9', color: 'black', padding: '1em', color: '#555' }}>
-                      {docData.content}
-                    </pre>
+                    <pre>{docData.content}</pre>
                   )}
                 </li>
               );
@@ -400,18 +459,18 @@ function IssuePage() {
             <p>You have already cast a vote on this issue, and it is set to One Time Voting.</p>
           )}
           <ul style={{ display: "inline-block", textAlign: "center", padding: 0, margin: 0, listStyle: "none" }}>
-            {(issue.optionAccounts || []).map((opt, idx) => (
-              <li key={opt} style={{ position: "relative", margin: "0.5em 0" }}>
+            {optionAddresses.map((address, idx) => (
+              <li key={address} style={{ position: "relative", margin: "0.5em 0" }}>
                 <div style={{ display: "inline-block", position: "relative" }}>
                   <Button 
+                    key={address}
                     disabled={!userHasEnoughTrustToVote || votingOver || userIneligibleToVote } 
-                    onClick={() => handleVote(issue.optionAddresses[idx]?.address)}
+                    onClick={() => handleVote(address)}
                   >
                     Vote for {issue.option_labels?.[idx] || `Option ${idx + 1}`}
                   </Button>
                   {/* Indicator if voted */}
-                  {issue.optionVotedOn && 
-                    issue.optionAddresses[idx]?.address === issue.optionVotedOn.address && (
+                  {optionVotedOn === address && (
                       <span style={{
                         position: "absolute",
                         left: "105%", // or adjust as needed
