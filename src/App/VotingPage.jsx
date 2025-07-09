@@ -28,6 +28,7 @@ function VotingPageComponent() {
   const [loading, setLoading] = React.useState(true);
   const [voteList, setVoteList] = React.useState([]);
   const [minTrust, setMinTrust] = React.useState(0);
+  const [senderAddress, setSenderAddress] = React.useState('');
   const [votingAuthoritySigchain, setVotingAuthoritySigchain] = React.useState('');
   const [votingAuthorityAccount, setVotingAuthorityAccount] = React.useState('');
   const [currentPage, setCurrentPage] = React.useState(1);
@@ -62,6 +63,23 @@ function VotingPageComponent() {
   React.useEffect(() => {
     if (!genesis) return;
 
+    const fetchSenderAddress = async () => {
+      try {
+        const address = await apiCall('finance/get/account/address', {
+          name: 'default'
+        });
+        setSenderAddress(address.address);
+      } catch (e) {
+        console.error('Failed to fetch your default account address:', e);
+        setSenderAddress('');
+      }
+    };
+    fetchSenderAddress();
+  }, [genesis]);
+
+  React.useEffect(() => {
+    if (!genesis) return;
+
     const checkSubscriptionStatus = async () => {
       try {
         const response = await proxyRequest(`${BACKEND_BASE}/subscription-status/${genesis}`, { method: 'GET' });
@@ -86,20 +104,23 @@ function VotingPageComponent() {
       }
     };
 
-    const fetchVotesCast = async () => {
-      try {
-        const response = await proxyRequest(`${BACKEND_BASE}/votes-cast/${genesis}`, { method: 'GET' });
-        setUserVotesCast(response.data.votesCast || 0);
-      } catch (e) {
-        console.error('Failed to fetch number of votes cast:', e);
-        setUserVotesCast(0);
-      }
-    };
-
     checkSubscriptionStatus();
     checkTrust();
+  }, [genesis, minTrust, senderAddress]);
+
+  React.useEffect(() => {
+    const fetchVotesCast = async () => {
+      if (!genesis || senderAddress == '') return; // wait until both are available
+      const response = await proxyRequest(
+        `${BACKEND_BASE}/votes-cast/${genesis}?senderAddress=${encodeURIComponent(senderAddress)}`,
+        { method: 'GET' }
+      );
+      console.log('fetchVotesCast::response', response);
+      setUserVotesCast(response.data.votesCast || 0);
+    };
     fetchVotesCast();
-  }, [genesis, minTrust]);
+  }, [genesis, senderAddress]);
+
 
   const handleSubscriptionToggle = async () => {
     const email = await window.getInput('Enter your email for voting issue announcements:');
@@ -120,10 +141,10 @@ function VotingPageComponent() {
   };
 
   React.useEffect(() => {
-    const debugValues = { genesis, filter, sortDirection, userTrust, minTrust, subscribed };
+    const debugValues = { genesis, filter, sortDirection, userTrust, minTrust, subscribed, senderAddress };
     console.log('Updating window.myModuleDebug:', debugValues);
     window.myModuleDebug = debugValues;
-  }, [genesis, filter, sortDirection, userTrust, minTrust, subscribed]);
+  }, [genesis, filter, sortDirection, userTrust, minTrust, subscribed, senderAddress]);
 
   React.useEffect(() => {
     async function loadVotes(page = 1) {
@@ -145,20 +166,9 @@ function VotingPageComponent() {
         const pageCount = Math.ceil((response.data?.total || 1) / votesPerPage);
         setTotalPages(pageCount);
 
-        const validVotes = rawVotes.flatMap(vote => {
-          try {
-            decompressFromBase64(vote.config); // ensure config is valid
-            return [vote];
-          } catch (e) {
-            console.warn(`Skipping corrupt vote asset ${vote.name}:`, e);
-            return [];
-          }
-        });
-        console.log('validVotes:', validVotes);
-
         const counts = {};
         const voteCounts = {};
-        for (const vote of validVotes) {
+        for (const vote of rawVotes) {
           try {
             const response  = await proxyRequest(`${BACKEND_BASE}/weighted-results/${vote.slug}`, { method: 'GET' });
             console.log('weighted-results response: ', response);
@@ -170,11 +180,12 @@ function VotingPageComponent() {
             vote.voteCount = voteCounts[vote.slug];
           }
         }
-        for (const vote of validVotes) {
+
+        for (const vote of rawVotes) {
           vote.voteCount = voteCounts[vote.slug] || 0;
         }
 
-        setVoteList(validVotes);
+        setVoteList(rawVotes);
         setWeightedVoteCounts(counts);
       } catch (e) {
         showErrorDialog({ message: 'Failed to load votes', note: e.message });
@@ -289,7 +300,7 @@ function VotingPageComponent() {
             Your Trust Score: {(userTrust ?? 0).toLocaleString()} |{' '}
             Your Voting Weight: {(Number(userWeight) / 1e8).toLocaleString(undefined, { maximumFractionDigits: 2 })} |{' '}
             Number of Votes You've Cast:
-            {!userVotesCast ? (
+            {!userVotesCast && userVotesCast != 0 ? (
               <> <span style={{ color: 'red' }}>(loading...)</span></>
             ) : (
               <> {userVotesCast.toLocaleString()} </>
@@ -297,7 +308,7 @@ function VotingPageComponent() {
           </p>
         </div>
       </FieldSet>
-      <FieldSet legend='Issues (Filtered & Sorted)' style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1rem' }}>
+      <FieldSet legend='Voting Issues (Filtered & Sorted)' style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1rem' }}>
         <div style={{ display: 'flex', justifyContent: 'center', gap: '1rem', marginBottom: '1rem', marginTop: '1rem' }}>
           {loading ? (
             <span style={{ color: 'red' }}>Loading...</span>
@@ -351,9 +362,9 @@ function VotingPageComponent() {
                           )}
                         </div>
                       </div>
-                      {vote.optionAccounts && (
+                      {vote.account_addresses && (
                         <ul style={{ fontSize: '0.9rem' }}>
-                          {vote.optionAccounts.map((opt, idx) => {
+                          {vote.account_addresses.map((opt, idx) => {
                             const label = vote.option_labels?.[idx] || `Option ${idx + 1}`;
                             const weightedCount = weightedVoteCounts?.[vote.slug]?.[opt] ?? 0;
 

@@ -31,14 +31,12 @@ const nexusVotingService = {
       }
     );
     
-    console.log('response: ', response);
-
     if (!response.data.success) {
       showErrorDialog({ message: 'Vote creation failed', note: response.error || 'Unknown error' });
       return;
     }
 
-    console.log("response: ", response.data);
+    console.log("createVoteViaBackend::response.data: ", response.data);
     return response.data;
   },
 

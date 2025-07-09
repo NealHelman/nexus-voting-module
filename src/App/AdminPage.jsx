@@ -5,7 +5,6 @@ import axios from 'axios';
 import { Link, useNavigate, useSearchParams  } from 'react-router-dom';
 import { proxyRequest } from 'nexus-module';
 import { sha256FromFile } from '../utils/ipfs';
-import { v4 as uuidv4 } from 'uuid';
 
 const BACKEND_BASE = 'http://65.20.79.65:4006';
 const React = NEXUS.libraries.React;
@@ -51,7 +50,6 @@ function AdminPageComponent() {
   const panelTitle = isEditing
     ? 'Nexus Community On-Chain Voting – Edit Voting Issue'
     : 'Nexus Community On-Chain Voting – Enter New Voting Issue';
-  const uuid = uuidv4();
   const navigate = useNavigate();
   const fileInputRef = React.useRef();
 
@@ -135,46 +133,59 @@ function AdminPageComponent() {
     getGenesis();
   }, []);
     
-  React.useEffect(() => {
-    const debugValues = { creatorGenesis, analysisGuid };
-    console.log('Updating window.myModuleDebug:', debugValues);
-    window.myModuleDebug = debugValues;
-  }, [creatorGenesis, analysisGuid]);
+React.useEffect(() => {
+  if (!creatorGenesis) return;
 
-  React.useEffect(() => {
-    if (!creatorGenesis) return;
+  setDeadline(calculateDefaultDeadline());
 
-    setDeadline(calculateDefaultDeadline());
+  if (editingId) {
+    const fetchAsset = async () => {
+      setSubmitButtonTitle('Update');
+      try {
+        // Fetch the on-chain asset (contains issueInfo, title, deadline, etc)
+        const assetData = await apiCall('assets/get/asset', { verbose: 'summary', address: editingId });
 
-    if (editingId) {
-      const fetchAsset = async () => {
-        setSubmitButtonTitle('Update');
-        try {
-          const data = await apiCall('assets/get/asset', { address: editingId });
-          const config = JSON.parse(decompressFromBase64(data.config));
-          console.log('fetchAsset::config: ', config);
+        setTitle(assetData.title || '');
+        setDeadline(assetData.deadline);
+        setCreatorGenesis(assetData.creatorGenesis || null);
 
-          setTitle(data.title);
-          setDescription(config.description);
-          setOptionLabels(config.option_labels);
-          setMinTrust(config.min_trust);
-          setVoteFinality(config.vote_finality);
-          setOrganizerName(config.organizer_name);
-          setOrganizerTelegram(config.organizer_telegram);
-          setDeadline(data.deadline);
-          setSupportingDocs(config.supporting_docs || []);
-          setCreatorGenesis(data.creatorGenesis || null);
-          setJsonGuid(config.issue_info_guid || null);
-          const analysisGuid = config.supporting_docs?.find(doc => doc.is_analysis).guid;
-          setAnalysisGuid(analysisGuid || null);
-        } catch (err) {
-          console.error('Failed to load vote asset:', err);
+        const issueInfoGuid = assetData.issueInfo;
+        setJsonGuid(issueInfoGuid || null);
+
+        if (issueInfoGuid) {
+          // Fetch the off-chain config from your backend (it returns { base64: ... })
+          const { data } = await proxyRequest(`${BACKEND_BASE}/ipfs/fetch/${issueInfoGuid}`, { method: 'GET' });
+
+          try {
+            const jsonStr = atob(data.base64); // base64 decode
+            const config = JSON.parse(jsonStr);
+            
+            console.log('fetchAsset::config: ', config);
+
+            setDescription(config.description || '');
+            setSummaryPro(config.summary_pro || '');
+            setSummaryCon(config.summary_con || '');
+            setPossibleOutcomes(config.possible_outcomes || '');
+            setOptionLabels(config.option_labels || []);
+            setMinTrust(config.min_trust || '');
+            setVoteFinality(config.vote_finality || '');
+            setOrganizerName(config.organizer_name || '');
+            setOrganizerTelegram(config.organizer_telegram || '');
+            setSupportingDocs(config.supporting_docs || []);
+            const analysisGuid = config.supporting_docs?.find(doc => doc.is_analysis)?.guid;
+            setAnalysisGuid(analysisGuid || null);
+          } catch (e) {
+            console.error('Failed to parse base64-encoded JSON:', e);
+          }
         }
-      };
+      } catch (err) {
+        console.error('Failed to load vote asset:', err);
+      }
+    };
 
-      fetchAsset();
-    }
-  }, [creatorGenesis, editingId]);
+    fetchAsset();
+  }
+}, [creatorGenesis, editingId]);
   
   React.useEffect(() => {
     if (!jsonGuid) return;
@@ -246,6 +257,7 @@ function AdminPageComponent() {
 
       const updatedFiles = [];
 
+      let guid = "";
       for (const { file, mimeType } of filesWithMime) {
         try {
           const hash = await sha256FromFile(file);
@@ -253,8 +265,10 @@ function AdminPageComponent() {
             onError(`Could not hash ${file.name}. Skipping.`);
             continue;
           }
+          guid = crypto.randomUUID();
           
           console.log(`Hash for ${file.name}: ${hash}`);
+          console.log(`GUID for ${file.name}: ${guid}`);
 
           const reader = new FileReader();
           const base64 = await new Promise((resolve, reject) => {
@@ -264,7 +278,7 @@ function AdminPageComponent() {
           });
 
           setUploadProgress(prev => ({ ...prev, [file.name]: 0 }));
-
+          
           const response = await proxyRequest(
             `${BACKEND_BASE}/ipfs/upload`,
             {
@@ -272,6 +286,7 @@ function AdminPageComponent() {
               headers: { 'Content-Type': 'application/json' },
               data: {
                 name: file.name,
+                guid,
                 mimeType,
                 base64
             }
@@ -279,12 +294,12 @@ function AdminPageComponent() {
           
           setUploadProgress(prev => ({ ...prev, [file.name]: 100 }));
           
-          if (!response?.data?.success || !response.data.guid) {
+          if (!response?.data?.success) {
             throw new Error(`Invalid response from backend for ${file.name}`);
           }
 
-          console.log(`Successfully uploaded ${file.name} with guid: ${response.data.guid}`);
-          updatedFiles.push({ name: file.name, guid: response.data.guid, sha256: hash });
+          console.log(`Successfully uploaded ${file.name} with guid: ${guid}`);
+          updatedFiles.push({ name: file.name, guid, sha256: hash });
         } catch (e) {
           console.error(`Failed to upload ${file.name}:`, e);
           setMessage(`Upload failed for ${file.name}: ${e.message || 'Unknown error'}`);
@@ -321,113 +336,34 @@ function AdminPageComponent() {
     }
     
     const safeTitle = title.toLowerCase().replace(/\W+/g, '-').substring(0, 32);
-    const assetName = `vote-${safeTitle}-${createdAt}-${uuid.slice(0, 8)}`
+    let guid = crypto.randomUUID();
+    const assetName = `vote-${safeTitle}-${createdAt}-${guid.slice(0, 8)}`
 
-    const jsonContent = {
-      summary_pro: summaryPro,
-      summary_con: summaryCon,
-      possible_outcomes: possibleOutcomes,
-      version: 1,
-      created: new Date().toISOString()
-    };
-
-    let jsonGuid = null;
-    try {
-      const uploadRes = await proxyRequest(`${BACKEND_BASE}/ipfs/upload`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        data: {
-          name: 'issue_info.json',
-          mimeType: 'application/json',
-          base64: btoa(JSON.stringify(jsonContent))
-        }
-      });
-
-      if (!uploadRes?.data?.success || !uploadRes.data.guid) {
-        throw new Error(`Invalid response from backend`);
-      }
-
-      jsonGuid = uploadRes.data.guid;
-      setJsonGuid(jsonGuid);
-    } catch (err) {
-      showErrorDialog({
-        message: 'Failed to upload issue_info.json to backend',
-        note: err?.response?.data?.Message || err.message
-      });
-      return;
-    }
-
-    const flaggedSupportingDocs = supportingDocs.map(doc => ({
-      ...doc,
-      is_analysis: doc.guid === analysisGuid
-    }));
+    const optionAccounts = optionLabels.map((label, idx) => {
+      const optionSafe = label.toLowerCase().replace(/\W+/g, '-').substring(0, 20);
+      guid = crypto.randomUUID();
+      return {
+        name: `opt-${optionSafe}-${guid.slice(0, 8)}`,
+        label: label.trim()
+      };
+    });
     
-    const config = {
-      description,
-      option_labels: optionLabels,
-      min_trust: parseInt(minTrust),
-      vote_finality: voteFinality,
-      organizer_name: organizerName,
-      organizer_telegram: organizerTelegram,
-      issue_info_guid: jsonGuid,
-      created_by: createdBy.trim() || 'unknown',
-      created_at: createdAt || Math.floor(Date.now() / 1000),
-      supporting_docs: flaggedSupportingDocs
-    };
-    
-    console.log('pre-update config: ', config);
+    const slugs = optionAccounts.map(acc => acc.name);
+    console.log('[createVote] account slugs: ', slugs);
 
-    const compressed = compressToBase64(JSON.stringify(config));
+    const issueInfoGuid = crypto.randomUUID();
     const assetConfig = {
       name: assetName,
-      type: 'asset',
-      format: 'JSON',
-      json: [
-        {
-          name: 'title',
-          type: 'string',
-          value: title,
-          mutable: true
-        },
-        {
-          name: 'deadline',
-          type: 'uint64',
-          value: parseInt(deadline),
-          mutable: true
-        },
-        {
-          name: 'creatorGenesis',
-          type: 'string',
-          value: creatorGenesis,
-          mutable: false
-        },
-        {
-          name: 'config',
-          type: 'string',
-          value: compressed,
-          mutable: true
-        }
-      ],
-      mutable: true
+      title,
+      deadline: parseInt(deadline),
+      issueInfo: issueInfoGuid,
+      creatorGenesis
     };
+    
+    console.log('[createVote] assetConfig: ', assetConfig);
 
-
-    const payloadSize = new Blob([compressed]).size;
-    setByteCount(payloadSize);
-    if (payloadSize > 1024) {
-      setMessage(`Data exceeds the 1KB asset storage limit (actual: ${payloadSize} bytes). Please shorten your input.`);
-      return;
-    }
-
-    try {
-      const optionAccounts = optionLabels.map((label, idx) => {
-        const optionSafe = label.toLowerCase().replace(/\W+/g, '-').substring(0, 20);
-        return {
-          name: `opt-${optionSafe}-${uuid.slice(0, 8)}`,
-          label: label.trim()
-        };
-      });
-
+   try {
+      let resultToUse = {};
       if (editingId) {
         try {
           const assetId = editingId;
@@ -436,57 +372,135 @@ function AdminPageComponent() {
             message: 'Success!',
             note: 'Vote updated...'
           });
+          resultToUse = updateResult;
         } catch (e) {
           showErrorDialog({
             message: 'Error updating voting issue',
             note: e.message
           });
         }
-        return;
-      }
+      } else {
+        const senderAddress = await apiCall('finance/get/account/address', {
+          name: 'default'
+        });
+        
+        let txidString = '';
+        try {
+          const response = await secureApiCall('finance/debit/account', {
+            from: senderAddress.address,
+            to: votingAuthorityAccount,
+            amount: submissionCost
+            }
+          );
 
-      const senderAddress = await apiCall('finance/get/account/address', {
-        name: 'default'
-      });
-      
-      let txidString = '';
-      try {
-        const response = await secureApiCall('finance/debit/account', {
-          from: senderAddress.address,
-          to: votingAuthorityAccount,
-          amount: submissionCost
+          const result = response.data ?? response;
+
+          // If result is a string, parse and patch
+          let outputObj;
+          if (typeof result === "string") {
+            try {
+              outputObj = JSON.parse(result);
+            } catch (err) {
+              showErrorDialog({
+                message: "Unexpected response format",
+                note: result,
+              });
+              return;
+            }
+          } else {
+            outputObj = result;
           }
-        );
 
-        const result = response.data ?? response; // fallback if not Axios
-        if (!result.success) {
+          // Normalize success to 1 if it's boolean true
+          if (outputObj && outputObj.success === true) {
+            outputObj.success = 1;
+          }
+
+          // Now your check will work as desired
+          if (!outputObj.success) {
+            showErrorDialog({
+              message: "NXS debit failed",
+              note: "No txid returned.",
+            });
+            return;
+          }
+          txidString = outputObj.txid.toString();
+          console.log('txidString: ', txidString);
+        } catch (e) {
           showErrorDialog({
-            message: 'NXS debit failed',
-            note: 'No txid returned.'
+            message: 'Error during sending voting issue creation fee',
+            note: e.message
           });
           return;
         }
-        txidString = result.txid.toString();
-        console.log('txidString: ', txidString);
-      } catch (e) {
+
+        const serviceRes = await nexusVotingService.createVoteViaBackend(txidString, assetConfig, optionAccounts);
+        if (!serviceRes.success) {
+          showErrorDialog({ 
+            message: 'Failed to create vote asset',
+            note: serviceRes.error
+          });
+          return;
+        }
+        resultToUse = serviceRes;
+      }
+      console.log('[createVote] resultToUse: ', resultToUse);
+
+      // Write issue_info only after asset and accounts have been created
+      const flaggedSupportingDocs = supportingDocs.map(doc => ({
+        ...doc,
+        is_analysis: doc.guid === analysisGuid
+      }));
+      
+      console.log('[createVote] flaggedSupportingDocs: ', flaggedSupportingDocs);
+      
+      const config = {
+        description,
+        summary_pro: summaryPro,
+        summary_con: summaryCon,
+        possible_outcomes: possibleOutcomes,
+        option_labels: optionLabels,
+        account_slugs: slugs,
+        account_addresses: resultToUse.accounts,
+        min_trust: parseInt(minTrust),
+        vote_finality: voteFinality,
+        organizer_name: organizerName,
+        organizer_telegram: organizerTelegram,
+        created_by: createdBy.trim() || 'unknown',
+        created_at: createdAt || Math.floor(Date.now() / 1000),
+        supporting_docs: flaggedSupportingDocs,
+        version: 1,
+        created: new Date().toISOString()
+      };
+      
+      try {
+        const uploadRes = await proxyRequest(`${BACKEND_BASE}/ipfs/upload`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          data: {
+            name: 'issue_info.json',
+            guid: issueInfoGuid,
+            mimeType: 'application/json',
+            base64: btoa(JSON.stringify(config))
+          }
+        });
+
+        if (!uploadRes?.data?.success) {
+          throw new Error(`Invalid response from backend`);
+        }
+      } catch (err) {
         showErrorDialog({
-          message: 'Error during sending voting issue creation fee',
-          note: e.message
+          message: 'Failed to upload issue_info.json to backend',
+          note: err?.response?.data?.Message || err.message
         });
         return;
       }
 
-      const result = await nexusVotingService.createVoteViaBackend(txidString, assetConfig, optionAccounts);
-      if (result.success) showSuccessDialog({ 
+      showSuccessDialog({
         message: 'Success!',
-        note: 'Vote created...'
+        note: 'Vote created..'
       });
       return;
-
-      showErrorDialog({
-        message: 'Timeout waiting for NXS transfer. Please try again.'
-      });
-
     } catch (e) {
       showErrorDialog({
         message: 'Error during vote creation',

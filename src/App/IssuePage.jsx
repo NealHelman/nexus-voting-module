@@ -48,6 +48,7 @@ function IssuePage() {
   const [error, setError] = React.useState('');
   const [docsContent, setDocsContent] = React.useState({});
   const [voteCost, setVoteCost] = React.useState(0.000001);
+  const [openDocs, setOpenDocs] = React.useState({});
 
   const [searchParams] = useSearchParams();
   const issueId = searchParams.get('issueId');
@@ -129,13 +130,12 @@ function IssuePage() {
     };
 
     const fetchVotesCastOverall = async () => {
-      try {
-        const response = await proxyRequest(`${BACKEND_BASE}/votes-cast/${genesis}`, { method: 'GET' });
-        setUserVotesCastOverall(response.data.votesCast || 0);
-      } catch (e) {
-        console.error('Failed to fetch number of votes cast:', e);
-        setUserVotesCastOverall(0);
-      }
+      if (!genesis || !senderAddress) return; // wait until both are available
+      const response = await proxyRequest(
+        `${BACKEND_BASE}/votes-cast/${genesis}?senderAddress=${encodeURIComponent(senderAddress)}`,
+        { method: 'GET' }
+      );
+      setUserVotesCastOverall(response.data.votesCast || 0);
     };
 
     const fetchSenderAddress = async () => {
@@ -156,10 +156,10 @@ function IssuePage() {
   }, [genesis]);
 
   React.useEffect(() => {
-    const debugValues = { genesis, userTrust, senderAddress };
+    const debugValues = { genesis, userTrust, senderAddress, issue, optionVotedOn };
     console.log('Updating window.myModuleDebug:', debugValues);
     window.myModuleDebug = debugValues;
-  }, [genesis, userTrust, senderAddress]);
+  }, [genesis, userTrust, senderAddress, issue, optionVotedOn]);
 
   // Fetch the voting issue metadata
   React.useEffect(() => {
@@ -172,11 +172,8 @@ function IssuePage() {
           `${BACKEND_BASE}/ledger/object?issueId=${issueId}`,
           { method: 'GET' }
         );
-        // Decompress config
-        const config = decompressFromBase64(response.data.config || '');
-        const metadata = JSON.parse(config);
-        console.log('metadata: ', metadata);
-        setIssue({ ...response.data, ...metadata });
+        console.log('fetchIssue::response: ', response);
+        setIssue(response.data);
       } catch (e) {
         setError('Failed to load voting issue: ' + (e.message || e.toString()));
       }
@@ -184,30 +181,6 @@ function IssuePage() {
     }
     if (issueId) fetchIssue();
   }, [issueId]);
-  
-  React.useEffect(() => {
-    const fetchSummaries = async () => {
-      try {
-        const { data } = await proxyRequest(`${BACKEND_BASE}/ipfs/fetch/${jsonGuid}`, { method: 'GET' });
-        console.log('fetchSummaries data: ', data);
-        try {
-          const jsonStr = atob(data.base64); // decode base64 to string
-          const parsed = JSON.parse(jsonStr);    // parse JSON
-          console.log('parsed: ', parsed);
-
-          setSummaryPro(parsed.summary_pro || '');
-          setSummaryCon(parsed.summary_con || '');
-          setPossibleOutcomes(parsed.possible_outcomes || '');
-        } catch (e) {
-          console.error('Failed to parse base64-encoded JSON:', e);
-        }
-      } catch (err) {
-        console.error('Failed to load vote asset:', err);
-      }
-    };
-
-    if (jsonGuid) fetchSummaries();
-  }, [jsonGuid]);
   
   React.useEffect(() => {
     const canUserVote = async () => {
@@ -227,43 +200,40 @@ function IssuePage() {
   }, [issue]);
   
   React.useEffect(() => {
-    const fetchVotingOptionAddresses = async () => {
-      if (!issue?.optionAccounts?.length) return;
-      const newOptionAddresses = [];
+    const fetchVotingDetails = async () => {
+      if (!issue?.account_addresses?.length) return;
+      const addresses = [];
       let votedOn = null;
       let ineligible = false;
 
-      for (const slug of issue.optionAccounts) {
-        try {
-          const optionAccount = `${votingAuthoritySigchain}:${slug}`;
-          const address = await apiCall('finance/get/account/address', { name: optionAccount });
-          newOptionAddresses.push(address);
+      for (const {name, address} of issue.account_addresses) {
+        addresses.push(address);
 
-          // Did the user vote for this option
-          const where =`results.contracts.OP=DEBIT AND results.contracts.from=${address} AND results.contracts.amount=0.000001`
-          const count = await apiCall('finance/transactions/account/timestamp/count', {
+        // Did the user vote for this option
+        try {
+          const result = await apiCall('finance/transactions/account/timestamp/count', {
             verbose: 'summary',
             name: 'default',
-            where
+            where: `results.contracts.OP=DEBIT AND results.contracts.to.address=${address} AND results.contracts.amount=0.000001`
           });
-          if (count > 0) {
+          if (result.count > 0) {
             votedOn = address;
             setuserCurrentlyVotedOn(address);
             if (issue.vote_finality === 'one_time') ineligible = true;
           }
         } catch (e) {
           showErrorDialog({
-            message: 'Unable to get voting option account addresses',
+            message: 'Unable to get voting option account transaction count',
             note: e.message
           });
           return;
         }
       }
-      setOptionAddresses(newOptionAddresses);
+      setOptionAddresses(addresses);
       setOptionVotedOn(votedOn);
       setUserIneligibleToVote(ineligible);
     };
-    if (issue) fetchVotingOptionAddresses();
+    if (issue) fetchVotingDetails();
   }, [issue, votingAuthoritySigchain]);
 
   // Fetch supporting docs from backend and decode
@@ -305,12 +275,12 @@ function IssuePage() {
   
   // Cast Vote //
   const handleVote = async (address) => {
-    console.log('address: ', address);
+    console.log('handleVote::address: ', address);
     let txidString = '';
     try {
       const response = await secureApiCall('finance/debit/account', {
         from: senderAddress,
-        to: address.address,
+        to: address,
         amount: voteCost,
         reference: userWeight
         }
@@ -342,6 +312,13 @@ function IssuePage() {
     }
   };
   
+  const toggleDoc = (guid) => {
+    setOpenDocs((prev) => ({
+      ...prev,
+      [guid]: !prev[guid],
+    }));
+  };
+
   if (loading) return <Panel title={panelTitle} icon={{ url: 'voting.svg', id: 'icon' }}><p>Loading voting issue...</p></Panel>;
   if (error) return <Panel title={panelTitle} icon={{ url: 'voting.svg', id: 'icon' }}><p style={{ color: 'red' }}>{error}</p></Panel>;
   if (!issue) return <Panel title={panelTitle} icon={{ url: 'voting.svg', id: 'icon' }}><p>No voting issue found.</p></Panel>;
@@ -354,10 +331,10 @@ function IssuePage() {
             Your Trust Score: {(userTrust ?? 0).toLocaleString()} |{' '}
             Your Voting Weight: {(Number(userWeight) / 1e8).toLocaleString(undefined, { maximumFractionDigits: 2 })} |{' '}
             Total Number of Votes You've Cast: 
-            {!userVotesCastOverall ? (
+            {!userVotesCastOverall && userVotesCastOverall != 0 ? (
               <> <span style={{ color: 'red' }}>(loading...)</span></>
             ) : (
-              <> userVotesCastOverall.toLocaleString() </>
+              <> {userVotesCastOverall.toLocaleString()} </>
             )}
           </p>
         </div>
@@ -398,55 +375,70 @@ function IssuePage() {
       </div>
       <div style={{ marginTop: '3rem' }}>
           <label htmlFor="summaryProArgumentsTextField" style={{ marginBottom: '0.25rem' }}>Summary - Pro Arguments</label>
-          <MultilineTextField label="Summary - Pro Arguments" value={summaryPro} disabled />
+          <MultilineTextField label="Summary - Pro Arguments" value={issue.summary_pro} disabled />
           <label htmlFor="summaryConArgumentsTextField" style={{ marginBottom: '0.25rem' }}>Summary - Con Arguments</label>
-          <MultilineTextField label="Summary - Con Arguments" value={summaryCon} disabled />
+          <MultilineTextField label="Summary - Con Arguments" value={issue.summary_con} disabled />
           <label htmlFor="possibleOutcomesTextField" style={{ marginBottom: '0.25rem' }}>Possible Outcomes</label>
-          <MultilineTextField label="Possible Outcomes" value={possibleOutcomes} disabled />
+          <MultilineTextField label="Possible Outcomes" value={issue.possible_outcomes} disabled />
       </div>
       {/* --- SUPPORTING DOCUMENTS --- */}
-      {issue.supporting_docs?.length > 0 && (
-        <FieldSet legend="Supporting Documents">
-          <ul style={{ width: '100%', padding: 0, margin: 0, listStyle: 'none' }}>
-            {issue.supporting_docs.map(doc => {
-              const docData = docsContent[doc.guid];
-              if (!docData) return <li key={doc.guid}>Loading document...</li>;
-              if (docData.error) return <li key={doc.guid} style={{ color: 'red' }}>{docData.error}</li>;
-              return (
-                <li key={doc.guid} style={{ width: '100%', boxSizing: 'border-box', marginBottom: '2em' }}>
-                  <div
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      gap: '1em',
-                      width: '100%',
-                    }}
+    {issue.supporting_docs?.length > 0 && (
+      <FieldSet legend="Supporting Documents">
+        <div style={{ textAlign: 'center' }}>
+          Click on the document title to toggle display of the document
+        </div>
+        <ul style={{ width: '100%', padding: 0, margin: 0, listStyle: 'none' }}>
+          {issue.supporting_docs.map(doc => {
+            const docData = docsContent[doc.guid];
+            if (!docData) return <li key={doc.guid}>Loading document...</li>;
+            if (docData.error) return <li key={doc.guid} style={{ color: 'red' }}>{docData.error}</li>;
+            const isOpen = !!openDocs[doc.guid];
+            return (
+              <li key={doc.guid} style={{ width: '100%', boxSizing: 'border-box', marginBottom: '2em' }}>
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: '1em',
+                    width: '100%',
+                  }}
+                >
+                  <strong
+                    style={{ cursor: "pointer" }}
+                    onClick={() => toggleDoc(doc.guid)}
                   >
-                    <strong>{docData.name}</strong>
-                    <Button
-                      onClick={() => handleDownload(docData.name, docData.base64)}
-                      style={{ marginLeft: 'auto', whiteSpace: 'nowrap' }}
-                    >
-                      Download
-                    </Button>
-                  </div>
-                  {docData.type === 'markdown' && (
-                    <ReactMarkdown remarkPlugins={[remarkGfm]}>{docData.content}</ReactMarkdown>
-                  )}
-                  {docData.type === 'text' && (
-                    <pre>{docData.content}</pre>
-                  )}
-                  {docData.type === 'unknown' && (
-                    <pre>{docData.content}</pre>
-                  )}
-                </li>
-              );
-            })}
-          </ul>
-        </FieldSet>
-      )}
-      {/* --- VOTE BUTTONS --- */}
+                    {docData.name}
+                  </strong>
+                  <Button
+                    onClick={() => handleDownload(docData.name, docData.base64)}
+                    style={{ marginLeft: 'auto', whiteSpace: 'nowrap' }}
+                  >
+                    Download
+                  </Button>
+                </div>
+                {isOpen && (
+                  <>
+                    {docData.type === 'markdown' && (
+                      <div className='document-display'>
+                        <ReactMarkdown remarkPlugins={[remarkGfm]}>{docData.content}</ReactMarkdown>
+                      </div>
+                    )}
+                    {docData.type === 'text' && (
+                      <pre className='document-display'>{docData.content}</pre>
+                    )}
+                    {docData.type === 'unknown' && (
+                      <pre>{docData.content}</pre>
+                    )}
+                  </>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      </FieldSet>
+    )}
+    {/* --- VOTE BUTTONS --- */}
       <FieldSet legend="CAST YOUR VOTE">
         <div style={{ textAlign: 'center' }}>
           {!userHasEnoughTrustToVote && (
@@ -464,25 +456,25 @@ function IssuePage() {
                 <div style={{ display: "inline-block", position: "relative" }}>
                   <Button 
                     key={address}
-                    disabled={!userHasEnoughTrustToVote || votingOver || userIneligibleToVote } 
+                    disabled={!userHasEnoughTrustToVote || votingOver || userIneligibleToVote} 
                     onClick={() => handleVote(address)}
                   >
                     Vote for {issue.option_labels?.[idx] || `Option ${idx + 1}`}
                   </Button>
                   {/* Indicator if voted */}
                   {optionVotedOn === address && (
-                      <span style={{
-                        position: "absolute",
-                        left: "105%", // or adjust as needed
-                        top: "50%",
-                        transform: "translateY(-50%)",
-                        color: "green",
-                        fontWeight: "bold",
-                        fontSize: "0.95em",
-                        whiteSpace: "nowrap",
-                      }}>
-                        (You voted on this one)
-                      </span>
+                    <span style={{
+                      position: "absolute",
+                      left: "105%",
+                      top: "50%",
+                      transform: "translateY(-50%)",
+                      color: "green",
+                      fontWeight: "bold",
+                      fontSize: "0.95em",
+                      whiteSpace: "nowrap",
+                    }}>
+                      (You voted on this one)
+                    </span>
                   )}
                 </div>
               </li>

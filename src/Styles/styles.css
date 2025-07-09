@@ -90,7 +90,7 @@ button:hover {
   justify-content: flex-start;
 }
 
-pre {
+.document-display {
   background: #fff;
   color: #000;
   padding: 1em;
