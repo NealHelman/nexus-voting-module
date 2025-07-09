@@ -15,7 +15,7 @@ const React = NEXUS.libraries.React;
 
 function VotingPageComponent() {
   const {
-    components: { Button, Panel, Dropdown, FieldSet },
+    components: { Button, Panel, Dropdown, FieldSet, Tooltip },
     utilities: { apiCall, confirm, showErrorDialog },
   } = NEXUS;
   
@@ -39,13 +39,35 @@ function VotingPageComponent() {
   const [totalPages, setTotalPages] = React.useState(1);
   const [sortField, setSortField] = React.useState('created');
   const [sortDirection, setSortDirection] = React.useState('desc');
+  const [backendAvailable, setBackendAvailable] = React.useState(null);
   
+  const pingBackend = async () => {
+    try {
+      const response = await fetch(`${BACKEND_BASE}/ping`);
+      const data = await response.json();
+      return data.status === 'ok';
+    } catch (err) {
+      showErrorDialog({ message: 'Backend is not responding. Please try again later.' });
+      setLoading(false);
+      return false;
+    }
+  };
+
   React.useEffect(() => {
+    const checkBackend = async () => {
+      const available = await pingBackend();
+      setBackendAvailable(available);
+    };
+    checkBackend();
+  }, []);
+
+  React.useEffect(() => {
+    if (backendAvailable !== true) return;
     nexusVotingService.getProtectedValues().then(({ data }) => {
       setVotingAuthoritySigchain(data.VOTING_AUTHORITY_SIGCHAIN);
       setVotingAuthorityAccount(data.VOTING_AUTHORITY_ACCOUNT);
     });
-  }, []);
+  }, [backendAvailable]);
 
   React.useEffect(() => {
     const getGenesis = async () => {
@@ -61,10 +83,10 @@ function VotingPageComponent() {
       }
     };
     getGenesis();
-  }, []);
+  }, [backendAvailable]);
     
   React.useEffect(() => {
-    if (!genesis) return;
+    if (!genesis || backendAvailable !== true) return;
 
     const fetchSenderAddress = async () => {
       try {
@@ -78,10 +100,10 @@ function VotingPageComponent() {
       }
     };
     fetchSenderAddress();
-  }, [genesis]);
+  }, [backendAvailable, genesis]);
 
   React.useEffect(() => {
-    if (!genesis) return;
+    if (!genesis || backendAvailable !== true) return;
 
     const checkSubscriptionStatus = async () => {
       try {
@@ -109,11 +131,11 @@ function VotingPageComponent() {
 
     checkSubscriptionStatus();
     checkTrust();
-  }, [genesis, minTrust, senderAddress]);
+  }, [backendAvailable, genesis, minTrust, senderAddress]);
 
   React.useEffect(() => {
     const fetchVotesCast = async () => {
-      if (!genesis || senderAddress == '') return; // wait until both are available
+      if (!genesis || senderAddress == '' || backendAvailable !== true) return; // wait until both are available
       const response = await proxyRequest(
         `${BACKEND_BASE}/votes-cast/${genesis}?senderAddress=${encodeURIComponent(senderAddress)}`,
         { method: 'GET' }
@@ -122,10 +144,11 @@ function VotingPageComponent() {
       setUserVotesCast(response.data.votesCast || 0);
     };
     fetchVotesCast();
-  }, [genesis, senderAddress]);
+  }, [backendAvailable, genesis, senderAddress]);
 
 
   const handleSubscriptionToggle = async () => {
+    if (backendAvailable !== true) return;
     const email = await window.getInput('Enter your email for voting issue announcements:');
     if (!email) return;
     const agreed = await confirm({ question: 'Please confirm your subscription change' });
@@ -151,7 +174,18 @@ function VotingPageComponent() {
 
   React.useEffect(() => {
     async function loadVotes(page = 1) {
+      if (backendAvailable !== true) return;
       setLoading(true);
+
+      const backendListening = await pingBackend();
+      if (!backendListening) {
+        setBackendAvailable(false);
+        showErrorDialog({ message: 'Backend is not responding. Please try again later.' });
+        setLoading(false);
+        return;
+      } else {
+        setBackendAvailable(true);
+      }
 
       try {
         const offset = (page - 1) * votesPerPage;
@@ -198,7 +232,7 @@ function VotingPageComponent() {
     }
 
     if (genesis) loadVotes(currentPage);
-  }, [genesis, currentPage, filter, votesPerPage, sortField, sortDirection]);
+  }, [backendAvailable, genesis, currentPage, filter, votesPerPage, sortField, sortDirection]);
 
   const handlePageSizeChange = (e) => {
     setVotesPerPage(parseInt(e.target.value, 10));
@@ -226,9 +260,16 @@ function VotingPageComponent() {
           zIndex: 2,
           cursor: 'pointer'
         }}>
-          <Link onClick={handleRefresh}>
-            <img src='refresh.svg' height='32px' /> 
-          </Link>
+          <Tooltip.Trigger tooltip="Display the User Guide">
+            <Link to={`/userguide`} style={{ marginRight: '1rem' }}>
+              <img src='document.svg' height='32px' /> 
+            </Link>
+          </Tooltip.Trigger>
+          <Tooltip.Trigger tooltip="Refresh Voting List Page">
+            <Link onClick={handleRefresh}>
+              <img src='refresh.svg' height='32px' /> 
+            </Link>
+          </Tooltip.Trigger>
         </div>
         {/* Centered Content */}
         <div style={{

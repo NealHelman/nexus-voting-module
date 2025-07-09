@@ -3,7 +3,7 @@ import { HashRouter, Routes, Route } from 'react-router-dom';
 import VotingPage from './VotingPage';
 import AdminPage from './AdminPage';
 import IssuePage from './IssuePage';
-console.log('AdminPage import:', AdminPage)
+import UserGuidePage from './UserGuidePage';
 import { useSelector, useDispatch } from 'react-redux';
 import {
   Panel,
@@ -31,6 +31,7 @@ export default function Main() {
         <Route path="/" element={<VotingPage />} />
         <Route path="/admin" element={<AdminPage />} />
         <Route path="/issue" element={<IssuePage />} />
+        <Route path="/userguide" element={<UserGuidePage />} />
       </Routes>
     </HashRouter>
   );

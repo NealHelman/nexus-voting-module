@@ -2,6 +2,5 @@ node_modules
 dist/js
 storage.json
 repo_info.json
-/dist
 /build
 *.zip

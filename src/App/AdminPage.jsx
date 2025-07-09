@@ -74,6 +74,16 @@ function AdminPageComponent() {
     return new Promise((resolve) => setTimeout(resolve, time));
   };
   
+  async function pingBackend() {
+    try {
+      const response = await fetch(`${BACKEND_BASE}/ping`);
+      const data = await response.json();
+      return data.status === 'ok';
+    } catch (err) {
+      return false;
+    }
+  };
+  
   function handleNewIssueClick() {
     editingId = '';
     isEditing = false;
@@ -223,113 +233,24 @@ React.useEffect(() => {
   }, [supportingDocs]);
   
   const handleFileChange = async (e) => {
-    console.log('handleFileChange called with files:', e.target.files?.length);
-    
-    // Log the actual file names to debug
-    if (e.target.files) {
-      Array.from(e.target.files).forEach((file, index) => {
-        console.log(`File ${index + 1}: ${file.name}, Size: ${file.size}, Type: ${file.type}`);
-      });
-    }
-  
-    setIsUploading(true);
-    
-    try {
-      const selectedFiles = Array.from(e.target.files);
-      const allowedTypes = ['text/markdown', 'text/x-markdown', 'text/plain', 'application/pdf'];
-      const allowedExtensions = {
-        md: 'text/markdown',
-        txt: 'text/plain',
-        pdf: 'application/pdf'
-      };
+    const selectedFiles = Array.from(e.target.files);
+    // Only accept allowed types/extensions as before...
+    const allowedExtensions = ['md', 'txt', 'pdf', 'doc', 'docx'];
+    const filteredFiles = selectedFiles.filter(file => {
+      const ext = file.name.split('.').pop().toLowerCase();
+      return allowedExtensions.includes(ext);
+    });
 
-      const filesWithMime = Array.from(e.target.files).map(file => {
-        let mimeType = file.type;
-        if (!allowedTypes.includes(mimeType)) {
-          const ext = file.name.split('.').pop().toLowerCase();
-          mimeType = allowedExtensions[ext] || '';
-        }
-        return { file, mimeType };
-      });
-      
-      if (filesWithMime.length === 0) {
-        setMessage('No valid files selected. Please choose .md, .txt, or .pdf files.');
-        setIsUploading(false);
-        if (fileInputRef.current) fileInputRef.current.value = '';
-        setUploadProgress({});
-        return;
-      }
+    const docsWithGuids = filteredFiles.map(file => ({
+      name: file.name,
+      guid: crypto.randomUUID(), // generate GUID here
+      file,
+      type: file.type
+    }));
 
-      const updatedFiles = [];
-
-      let guid = "";
-      for (const { file, mimeType } of filesWithMime) {
-        try {
-          const hash = await sha256FromFile(file);
-          if (!hash) {
-            onError(`Could not hash ${file.name}. Skipping.`);
-            continue;
-          }
-          guid = crypto.randomUUID();
-          
-          console.log(`Hash for ${file.name}: ${hash}`);
-          console.log(`GUID for ${file.name}: ${guid}`);
-
-          const reader = new FileReader();
-          const base64 = await new Promise((resolve, reject) => {
-            reader.onload = () => resolve(reader.result.split(',')[1]);
-            reader.onerror = () => reject('FileReader failed');
-            reader.readAsDataURL(file);
-          });
-
-          setUploadProgress(prev => ({ ...prev, [file.name]: 0 }));
-          
-          const response = await proxyRequest(
-            `${BACKEND_BASE}/ipfs/upload`,
-            {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              data: {
-                name: file.name,
-                guid,
-                mimeType,
-                base64
-            }
-          });
-          
-          setUploadProgress(prev => ({ ...prev, [file.name]: 100 }));
-          
-          if (!response?.data?.success) {
-            throw new Error(`Invalid response from backend for ${file.name}`);
-          }
-
-          console.log(`Successfully uploaded ${file.name} with guid: ${guid}`);
-          updatedFiles.push({ name: file.name, guid, sha256: hash });
-        } catch (e) {
-          console.error(`Failed to upload ${file.name}:`, e);
-          setMessage(`Upload failed for ${file.name}: ${e.message || 'Unknown error'}`);
-        }
-      }
-      if (updatedFiles.length > 0) {
-        setSupportingDocs(prev => {
-          const existingGuids = new Set(prev.map(d => d.guid));
-          // Avoid duplicates
-          const onlyNew = updatedFiles.filter(doc => !existingGuids.has(doc.guid));
-          return [...prev, ...onlyNew];
-        });
-        setMessage(`${updatedFiles.length} file(s) uploaded successfully.`);
-      } else {
-        setMessage('No files were uploaded successfully.');
-      }
-    } catch (error) {
-      console.error('Error in handleFileChange:', error);
-      setMessage(`Upload error: ${error.message || 'Unknown error'}`);
-    } finally {
-      setIsUploading(false);
-      if (fileInputRef.current) fileInputRef.current.value = '';
-      console.log('The fileInputRef.current.value was set to empty string.');
-      setUploadProgress({});
-    }
+    setSupportingDocs(prev => [...prev, ...docsWithGuids]);
+    setMessage(`${docsWithGuids.length} file(s) staged for upload. They will be uploaded on submission.`);
+    if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
   const createVote = async () => {
@@ -385,6 +306,14 @@ React.useEffect(() => {
           });
         }
       } else {
+        // BACKEND PING
+        const backendListening = await pingBackend();
+        if (!backendListening) {
+          showErrorDialog({ message: 'Backend is not responding. Please try again later.' });
+          setLoading(false);
+          return;
+        }
+        
         const senderAddress = await apiCall('finance/get/account/address', {
           name: 'default'
         });
@@ -451,13 +380,49 @@ React.useEffect(() => {
       }
       console.log('[createVote] resultToUse: ', resultToUse);
 
-      // Write issue_info only after asset and accounts have been created
-      const flaggedSupportingDocs = supportingDocs.map(doc => ({
-        ...doc,
-        is_analysis: doc.guid === analysisGuid
-      }));
-      
-      console.log('[createVote] flaggedSupportingDocs: ', flaggedSupportingDocs);
+      // Upload files
+      setIsUploading(true);
+      let uploadedDocs = [];
+      for (const doc of supportingDocs) {
+        try {
+          const reader = new FileReader();
+          const base64 = await new Promise((resolve, reject) => {
+            reader.onload = () => resolve(reader.result.split(',')[1]);
+            reader.onerror = () => reject('FileReader failed');
+            reader.readAsDataURL(doc.file);
+          });
+
+          const response = await proxyRequest(
+            `${BACKEND_BASE}/ipfs/upload`,
+            {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              data: {
+                name: doc.name,
+                guid: doc.guid,
+                mimeType: doc.type,
+                base64
+              }
+            }
+          );
+
+          if (!response?.data?.success) {
+            throw new Error(`Failed to upload ${doc.name}`);
+          }
+
+          uploadedDocs.push({
+            name: doc.name,
+            guid: doc.guid,
+            sha256: await sha256FromFile(doc.file),
+            is_analysis: doc.guid === analysisGuid
+          });
+        } catch (e) {
+          showErrorDialog({ message: `Upload failed for ${doc.name}`, note: e.message });
+          setIsUploading(false);
+          return;
+        }
+      }
+      setIsUploading(false);
       
       const config = {
         description,
@@ -473,7 +438,7 @@ React.useEffect(() => {
         organizer_telegram: organizerTelegram,
         created_by: createdBy.trim() || 'unknown',
         created_at: createdAt || Math.floor(Date.now() / 1000),
-        supporting_docs: flaggedSupportingDocs,
+        supporting_docs: uploadedDocs,
         version: 1,
         created: new Date().toISOString()
       };
@@ -733,7 +698,7 @@ React.useEffect(() => {
           </div>
         )}
         <div style={{ display: 'flex', justifyContent: 'center', gap: '1rem', marginBottom: '1rem', marginTop: '1rem' }}>
-          <Button onClick={createVote} disabled={byteCount > 1024 || isSubmitting}>
+          <Button onClick={createVote} disabled={isSubmitting}>
             { submitButtonTitle } Voting Issue
           </Button>
           <Button disabled={isSubmitting} onClick={handleNewIssueClick}>Enter a New Issue</Button>
