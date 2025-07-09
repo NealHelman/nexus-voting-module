@@ -4,7 +4,10 @@ import { decompressFromBase64 } from 'lz-string';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import nexusVotingService from '../services/nexusVotingService';
+import { copyright } from '../utils/copyright.js';
+import nxsPackage from '../../nxs_package.json' with { type: "json" };
 
+const { version } = nxsPackage;
 const BACKEND_BASE = 'http://65.20.79.65:4006';
 const React = NEXUS.libraries.React;
 
@@ -112,6 +115,22 @@ function IssuePage() {
     };
     getGenesis();
   }, []);
+  
+  React.useEffect(() => {
+    if (!genesis) return;
+      const fetchSenderAddress = async () => {
+      try {
+        const address = await apiCall('finance/get/account/address', {
+          name: 'default'
+        });
+        setSenderAddress(address.address);
+      } catch (e) {
+        console.error('Failed to fetch your default account address:', e);
+        setSenderAddress('');
+      }
+    };
+    fetchSenderAddress();
+  }, [genesis]);
 
   React.useEffect(() => {
     if (!genesis) return;
@@ -138,22 +157,9 @@ function IssuePage() {
       setUserVotesCastOverall(response.data.votesCast || 0);
     };
 
-    const fetchSenderAddress = async () => {
-      try {
-        const address = await apiCall('finance/get/account/address', {
-          name: 'default'
-        });
-        setSenderAddress(address.address);
-      } catch (e) {
-        console.error('Failed to fetch your default account address:', e);
-        setSenderAddress('');
-      }
-    };
-
-    fetchSenderAddress();
     checkTrust();
     fetchVotesCastOverall();
-  }, [genesis]);
+  }, [genesis, senderAddress]);
 
   React.useEffect(() => {
     const debugValues = { genesis, userTrust, senderAddress, issue, optionVotedOn };
@@ -489,9 +495,21 @@ function IssuePage() {
           </Link>
         </Button>
       </div>
-      <div style={{ textAlign: 'right', fontSize: 'small' }}>
-        © 2025, Neal Helman - Created with lots of help from AI.
-      </div>
+      <div style={{
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        fontSize: 'small'
+      }}>
+        <div>
+          {/* Left-justified content here */}
+          version {version}
+        </div>
+        <div>
+          {/* Right-justified content here */}
+          {copyright}
+        </div>
+        </div>
     </Panel>
   );
 }

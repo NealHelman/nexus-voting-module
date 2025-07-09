@@ -4,9 +4,12 @@ import { proxyRequest } from 'nexus-module';
 import { Link } from 'react-router-dom';
 import { decompressFromBase64  } from 'lz-string';
 import nexusVotingService from '../services/nexusVotingService';
+import { copyright } from '../utils/copyright.js';
 import AdminPage from './AdminPage';
 import IssuePage from './IssuePage';
+import nxsPackage from '../../nxs_package.json' with { type: "json" };
 
+const { version } = nxsPackage;
 const BACKEND_BASE = 'http://65.20.79.65:4006';
 const React = NEXUS.libraries.React;
 
@@ -141,10 +144,10 @@ function VotingPageComponent() {
   };
 
   React.useEffect(() => {
-    const debugValues = { genesis, filter, sortDirection, userTrust, minTrust, subscribed, senderAddress };
+    const debugValues = { genesis, filter, sortDirection, userTrust, minTrust, subscribed, senderAddress, weightedVoteCounts };
     console.log('Updating window.myModuleDebug:', debugValues);
     window.myModuleDebug = debugValues;
-  }, [genesis, filter, sortDirection, userTrust, minTrust, subscribed, senderAddress]);
+  }, [genesis, filter, sortDirection, userTrust, minTrust, subscribed, senderAddress, weightedVoteCounts]);
 
   React.useEffect(() => {
     async function loadVotes(page = 1) {
@@ -366,10 +369,10 @@ function VotingPageComponent() {
                         <ul style={{ fontSize: '0.9rem' }}>
                           {vote.account_addresses.map((opt, idx) => {
                             const label = vote.option_labels?.[idx] || `Option ${idx + 1}`;
-                            const weightedCount = weightedVoteCounts?.[vote.slug]?.[opt] ?? 0;
-
+                            const addressString = typeof opt === 'string' ? opt : opt.address;
+                            const weightedCount = weightedVoteCounts?.[vote.slug]?.[addressString] ?? 0;
                             return (
-                              <li key={opt}>
+                              <li key={addressString}>
                                 <strong>{label}</strong>: {(Number(weightedCount) / 1e8).toLocaleString(undefined, { maximumFractionDigits: 2 })} weighted NXS
                               </li>
                             );
@@ -402,8 +405,20 @@ function VotingPageComponent() {
           </Button>
         </div>
       </FieldSet>
-      <div style={{ textAlign: 'right', fontSize: 'small' }}>
-        © 2025, Neal Helman - Created with lots of help from AI.
+      <div style={{
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        fontSize: 'small'
+      }}>
+        <div>
+          {/* Left-justified content here */}
+          version {version}
+        </div>
+        <div>
+          {/* Right-justified content here */}
+          {copyright}
+        </div>
       </div>
     </Panel>
   );

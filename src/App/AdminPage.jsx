@@ -5,7 +5,10 @@ import axios from 'axios';
 import { Link, useNavigate, useSearchParams  } from 'react-router-dom';
 import { proxyRequest } from 'nexus-module';
 import { sha256FromFile } from '../utils/ipfs';
+import { copyright } from '../utils/copyright.js';
+import nxsPackage from '../../nxs_package.json' with { type: "json" };
 
+const { version } = nxsPackage;
 const BACKEND_BASE = 'http://65.20.79.65:4006';
 const React = NEXUS.libraries.React;
 
@@ -72,6 +75,8 @@ function AdminPageComponent() {
   };
   
   function handleNewIssueClick() {
+    editingId = '';
+    isEditing = false;
     setTitle('');
     setDescription('');
     setOptionLabels(['', '']);
@@ -739,8 +744,20 @@ React.useEffect(() => {
           </Button>
         </div>
       </div>
-      <div style={{ textAlign: 'right', fontSize: 'small' }}>
-        © 2025, Neal Helman - Created with lots of help from AI.
+      <div style={{
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        fontSize: 'small'
+      }}>
+        <div>
+          {/* Left-justified content here */}
+          version {version}
+        </div>
+        <div>
+          {/* Right-justified content here */}
+          {copyright}
+        </div>
       </div>
     </Panel>
   );
