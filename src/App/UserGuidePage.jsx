@@ -38,6 +38,13 @@ function UserGuidePage() {
 
   return (
     <Panel title={panelTitle} icon={{ url: 'voting.svg', id: 'icon' }}>
+      <div style={{ textAlign: 'center' }}>
+        <Button>
+          <Link to="/" style={{ textDecoration: 'none', color: 'inherit' }}>
+            Return to Voting Issue List Page
+          </Link>
+        </Button>
+      </div>
       <FieldSet legend="User Guide">
         <div className='document-display'>
           {loading ? (
@@ -45,9 +52,11 @@ function UserGuidePage() {
           ) : error ? (
             <div style={{ color: 'red' }}>Error: {error}</div>
           ) : (
-            <ReactMarkdown remarkPlugins={[remarkGfm]}>
-              {docContent}
-            </ReactMarkdown>
+            <div style={{ fontFamily: 'Times New Roman, Times, serif' }}>
+              <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                {docContent}
+              </ReactMarkdown>
+            </div>
           )}
         </div>
       </FieldSet>
