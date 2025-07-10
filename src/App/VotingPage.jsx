@@ -15,17 +15,20 @@ const React = NEXUS.libraries.React;
 
 function VotingPageComponent() {
   const {
-    components: { Button, Panel, Dropdown, FieldSet, Tooltip },
-    utilities: { apiCall, confirm, showErrorDialog },
+    components: { Button, Panel, Dropdown, FieldSet, TextField, Tooltip },
+    utilities: { apiCall, confirm, showErrorDialog, showSuccessDialog },
   } = NEXUS;
   
   const [filter, setFilter] = React.useState('active');
   const dispatch = useDispatch();
   const [genesis, setGenesis] = React.useState('');
   const [canAccessAdmin, setCanAccessAdmin] = React.useState(0);
-  const [subscribed, setSubscribed] = React.useState(0);
+  const [subscribed, setSubscribed] = React.useState(1);
   const [userTrust, setUserTrust] = React.useState(0);
   const [userWeight, setUserWeight] = React.useState(0);
+  const [userEmail, setUserEmail] = React.useState('');
+  const [userEmailValid, setUserEmailValid] = React.useState(false);
+  const [emailVisible, setEmailVisible] = React.useState(false);
   const [userVotesCast, setUserVotesCast] = React.useState(0);
   const [weightedVoteCounts, setWeightedVoteCounts] = React.useState({});
   const [loading, setLoading] = React.useState(true);
@@ -52,7 +55,51 @@ function VotingPageComponent() {
       return false;
     }
   };
+  
+  const handleSubscriptionToggle = async () => {
+    if (!userEmail || !genesis || backendAvailable !== true) return;
+    const labelYes = subscribed ? 'Unsubscribe' : 'Subscribe';
+    const agreed = await confirm({ 
+      question: 'Please confirm your subscription change',
+      labelYes,
+      labelNo: 'Cancel'
+    });
+    if (!agreed) return;
+    const endpoint = subscribed ? '/unsubscribe' : '/subscribe';
+    try {
+      const response = await proxyRequest(`${BACKEND_BASE}${endpoint}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        data: JSON.stringify({ email: userEmail, genesis: genesis })
+      });
+      if (!response.data.success) {
+        showErrorDialog({ message: 'Failed to change your subscription' });
+        return;
+      } else {
+        const newStatus = subscribed ? 'unsubscribed' : 'subscribed';
+        showSuccessDialog({ message: 'Success', note: 'You are now ' + newStatus + ' to announcements when new voting issues are submitted.' });
+      }
+      
+      setSubscribed(!subscribed);
+    } catch (e) {
+      showErrorDialog({ 
+        message: 'Failed to change your subscription',
+        note: e.message
+      });
+    } finally {
+      setUserEmail('');
+      setEmailVisible(false);
+    }
+  };
 
+  React.useEffect(() => {
+    const isValidEmail = async () => {
+      if (!userEmail) return;
+      setUserEmailValid(/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(userEmail));
+    }
+    isValidEmail();
+  }, [userEmail]);
+  
   React.useEffect(() => {
     const checkBackend = async () => {
       const available = await pingBackend();
@@ -108,7 +155,6 @@ function VotingPageComponent() {
     const checkSubscriptionStatus = async () => {
       try {
         const response = await proxyRequest(`${BACKEND_BASE}/subscription-status/${genesis}`, { method: 'GET' });
-        console.log("response.data.subscribed: ", response.data.subscribed);
         setSubscribed(response.data.subscribed);
       } catch (e) {
         console.error('Failed to check subscription status:', e);
@@ -145,26 +191,6 @@ function VotingPageComponent() {
     };
     fetchVotesCast();
   }, [backendAvailable, genesis, senderAddress]);
-
-
-  const handleSubscriptionToggle = async () => {
-    if (backendAvailable !== true) return;
-    const email = await window.getInput('Enter your email for voting issue announcements:');
-    if (!email) return;
-    const agreed = await confirm({ question: 'Please confirm your subscription change' });
-    if (!agreed) return;
-    const endpoint = subscribed ? '/unsubscribe' : '/subscribe';
-    try {
-      const data = await proxyRequest(`${BACKEND_BASE}${endpoint}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, genesis })
-      });
-      setSubscribed(!subscribed);
-    } catch (e) {
-      console.error(`Failed to ${subscribed ? 'unsubscribe' : 'subscribe'}:`, e);
-    }
-  };
 
   React.useEffect(() => {
     const debugValues = { genesis, filter, sortDirection, userTrust, minTrust, subscribed, senderAddress, weightedVoteCounts };
@@ -331,9 +357,27 @@ function VotingPageComponent() {
             gap: '2rem',
             justifyContent: 'center'
           }}>
-            <Button onClick={handleSubscriptionToggle}>
-              {subscribed ? 'Unsubscribe from Announcements' : 'Subscribe to Announcements'}
-            </Button>
+            <div>
+              <div>
+                <Button onClick={() => setEmailVisible(true)}>
+                  {subscribed ? 'Unsubscribe from Announcements' : 'Subscribe to Announcements'}
+                </Button>
+              </div>
+              <div style={{ textAlign: 'center', display: emailVisible ? 'inline' : 'none' }}>
+                <div>
+                  <label htmlFor="emailTextField" style={{ marginBottom: '0.25rem' }}>Email</label>
+                  <TextField label="Email" value={userEmail} onChange={(e) => setUserEmail(e.target.value)} />
+                </div>
+                <div>
+                  <Button onClick={handleSubscriptionToggle} disabled={!userEmailValid} style={{ marginRight: '1rem' }}>
+                    Submit
+                  </Button>
+                  <Button onClick={() => setEmailVisible(false)}>
+                    Cancel
+                  </Button>
+                </div>
+              </div>
+            </div>
             {canAccessAdmin && <Button><Link to="/admin" style={{ textDecoration: 'none', color: 'inherit' }}>Enter a New Issue to Vote On</Link></Button>}
           </div>
         </div>
