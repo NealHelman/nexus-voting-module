@@ -48,8 +48,8 @@ function AdminPageComponent() {
   const [submitButtonTitle, setSubmitButtonTitle] = React.useState('Submit');
   
   const [searchParams] = useSearchParams();
-  const isEditing = searchParams.has('edit');
-  const editingId = searchParams.get('edit');
+  let isEditing = searchParams.has('edit');
+  let editingId = searchParams.get('edit');
   const panelTitle = isEditing
     ? 'Nexus Community On-Chain Voting – Edit Voting Issue'
     : 'Nexus Community On-Chain Voting – Enter New Voting Issue';
@@ -107,8 +107,9 @@ function AdminPageComponent() {
 
 
     navigate('/admin');
+    let el = null;
     setTimeout(() => {
-      const el = document.getElementById('top');
+      el = document.getElementById('top');
       if (el) el.scrollIntoView({ behavior: 'smooth' });
     }, 100); // slight delay to ensure render
   };
@@ -281,6 +282,7 @@ React.useEffect(() => {
     const assetConfig = {
       name: assetName,
       title,
+      description,
       deadline: parseInt(deadline),
       issueInfo: issueInfoGuid,
       creatorGenesis
