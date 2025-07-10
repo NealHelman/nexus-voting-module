@@ -15,7 +15,7 @@ const React = NEXUS.libraries.React;
 
 function VotingPageComponent() {
   const {
-    components: { Button, Panel, Dropdown, FieldSet, TextField, Tooltip },
+    components: { Button, Modal, Panel, Dropdown, FieldSet, TextField, Tooltip },
     utilities: { apiCall, confirm, showErrorDialog, showSuccessDialog },
   } = NEXUS;
   
@@ -320,48 +320,25 @@ function VotingPageComponent() {
           </Tooltip.Trigger>
         </div>
         {titleSearchVisible && (
-          <div
-            id="titleSearchEntryDialogOverlay"
-            style={{
-              position: 'fixed',
-              top: 0,
-              left: 0,
-              width: '100vw',
-              height: '100vh',
-              background: 'rgba(0,0,0,0.4)', // semi-transparent background
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              zIndex: 9999
-            }}
+          <Modal 
+            id="titleSearchEntryDialog" 
+            escToClose={true}
+            removeModal={ () => setEmailVisible(false)}
+            style={{ width: '500px' }}
           >
-            <div
-              id="titleSearchEntryDialog"
-              style={{
-                background: 'white',
-                padding: '2em 2.5em',
-                border: '2px solid #0086d1',
-                borderRadius: '8px',
-                minWidth: '320px',
-                boxShadow: '0 4px 24px rgba(0,0,0,0.18)',
-                textAlign: 'center',
-                zIndex: 10000
-              }}
-            >
-              <div style={{ marginBottom: '1em' }}>
-                <label htmlFor="searchTermTextField" style={{ marginBottom: '0.25rem', display: 'block', color: 'black' }}>Enter a word to search</label>
-                <TextField label="SearchTerm" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} style={{ color: 'black' }} />
-              </div>
-              <div>
-                <Button onClick={handleStartSearch} style={{ marginRight: '1rem' }}>
-                  Search
-                </Button>
-                <Button onClick={() => setTitleSearchVisible(false)}>
-                  Cancel
-                </Button>
-              </div>
-            </div>
-          </div>
+            <Modal.Header>Enter a word to search (titles only and case-sensitive)</Modal.Header>
+            <Modal.Body>
+              <TextField label="SearchTerm" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
+            </Modal.Body>
+            <Modal.Footer>
+              <Button onClick={handleStartSearch} disabled={!searchTerm} style={{ marginRight: '1rem' }}>
+                Search
+              </Button>
+              <Button onClick={() => setTitleSearchVisible(false)}>
+                Cancel
+              </Button>
+            </Modal.Footer>
+          </Modal>
         )}
 
         {/* Centered Content */}
@@ -431,48 +408,25 @@ function VotingPageComponent() {
                 </Button>
               </div>
               {emailVisible && (
-                <div
-                  id="emailEntryDialogOverlay"
-                  style={{
-                    position: 'fixed',
-                    top: 0,
-                    left: 0,
-                    width: '100vw',
-                    height: '100vh',
-                    background: 'rgba(0,0,0,0.4)', // semi-transparent background
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    zIndex: 9999
-                  }}
+                <Modal 
+                  id="emailEntryDialog" 
+                  escToClose={true}
+                  removeModal={ () => setEmailVisible(false)}
+                  style={{ width: '500px' }}
                 >
-                  <div
-                    id="emailEntryDialog"
-                    style={{
-                      background: 'white',
-                      padding: '2em 2.5em',
-                      border: '2px solid #0086d1',
-                      borderRadius: '8px',
-                      minWidth: '320px',
-                      boxShadow: '0 4px 24px rgba(0,0,0,0.18)',
-                      textAlign: 'center',
-                      zIndex: 10000
-                    }}
-                  >
-                    <div style={{ marginBottom: '1em' }}>
-                      <label htmlFor="emailTextField" style={{ marginBottom: '0.25rem', display: 'block', color: 'black' }}>Please enter your email address...</label>
-                      <TextField label="Email" value={userEmail} onChange={(e) => setUserEmail(e.target.value)} style={{ color: 'black' }}/>
-                    </div>
-                    <div>
-                      <Button onClick={handleSubscriptionToggle} disabled={!userEmailValid} style={{ marginRight: '1rem' }}>
-                        Submit
-                      </Button>
-                      <Button onClick={() => setEmailVisible(false)}>
-                        Cancel
-                      </Button>
-                    </div>
-                  </div>
-                </div>
+                  <Modal.Header>Enter your email</Modal.Header>
+                  <Modal.Body>
+                    <TextField label="Email" value={userEmail} onChange={(e) => setUserEmail(e.target.value)} style={{ color: 'white' }}/>
+                  </Modal.Body>
+                  <Modal.Footer>
+                    <Button onClick={handleSubscriptionToggle} disabled={!userEmailValid} style={{ marginRight: '1rem' }}>
+                      Submit
+                    </Button>
+                    <Button onClick={() => setEmailVisible(false)}>
+                      Cancel
+                    </Button>
+                  </Modal.Footer>
+                </Modal>
               )}
             </div>
             {canAccessAdmin && <Button><Link to="/admin" style={{ textDecoration: 'none', color: 'inherit' }}>Enter a New Issue to Vote On</Link></Button>}
