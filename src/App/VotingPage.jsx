@@ -43,6 +43,9 @@ function VotingPageComponent() {
   const [sortField, setSortField] = React.useState('created');
   const [sortDirection, setSortDirection] = React.useState('desc');
   const [backendAvailable, setBackendAvailable] = React.useState(null);
+  const [titleSearchVisible, setTitleSearchVisible] = React.useState(false);
+  const [searchTerm, setSearchTerm] = React.useState('');
+  const [status, setStatus] = React.useState("idle");
   
   const pingBackend = async () => {
     try {
@@ -91,7 +94,7 @@ function VotingPageComponent() {
       setEmailVisible(false);
     }
   };
-
+  
   React.useEffect(() => {
     const isValidEmail = async () => {
       if (!userEmail) return;
@@ -198,8 +201,9 @@ function VotingPageComponent() {
     window.myModuleDebug = debugValues;
   }, [genesis, filter, sortDirection, userTrust, minTrust, subscribed, senderAddress, weightedVoteCounts]);
 
-  React.useEffect(() => {
-    async function loadVotes(page = 1) {
+  const loadVotes = React.useCallback(
+    async (page = 1, search = '') => {
+      setStatus(search ? "searching" : "loading");
       if (backendAvailable !== true) return;
       setLoading(true);
 
@@ -216,16 +220,19 @@ function VotingPageComponent() {
       try {
         const offset = (page - 1) * votesPerPage;
         let showMine = '';
-        if (sortField == 'mine') {
-          showMine = `&creatorGenesis=${creatorGenesis}`;
-        };
+        if (sortField === 'mine') {
+          showMine = `&creatorGenesis=${genesis}`;
+        }
+        let searchTitle = '';
+        if (search !== '') {
+          searchTitle = `&searchTitle=${search}`;
+        }
         const response = await proxyRequest(
-          `${BACKEND_BASE}/ledger/list/objects/paginated?limit=${votesPerPage}&offset=${offset}&sort=${sortField}&direction=${sortDirection}${showMine}`,
+          `${BACKEND_BASE}/ledger/list/objects/paginated?limit=${votesPerPage}&offset=${offset}&sort=${sortField}&direction=${sortDirection}${showMine}${searchTitle}`,
           { method: 'GET' }
         );
 
         const rawVotes = response.data?.objects || [];
-        console.log('rawVotes: ', rawVotes);
         const pageCount = Math.ceil((response.data?.total || 1) / votesPerPage);
         setTotalPages(pageCount);
 
@@ -233,12 +240,10 @@ function VotingPageComponent() {
         const voteCounts = {};
         for (const vote of rawVotes) {
           try {
-            const response  = await proxyRequest(`${BACKEND_BASE}/weighted-results/${vote.slug}`, { method: 'GET' });
-            console.log('weighted-results response: ', response);
+            const response = await proxyRequest(`${BACKEND_BASE}/weighted-results/${vote.slug}`, { method: 'GET' });
             counts[vote.slug] = response.data.countResult;
             voteCounts[vote.slug] = response.data.totalUniqueVotes || 0;
           } catch (err) {
-            console.warn(`Failed to fetch weighted vote count for ${vote.slug}`, err);
             counts[vote.slug] = {};
             vote.voteCount = voteCounts[vote.slug];
           }
@@ -254,16 +259,29 @@ function VotingPageComponent() {
         showErrorDialog({ message: 'Failed to load votes', note: e.message });
       }
 
+      setStatus("idle");
       setLoading(false);
-    }
+      setSearchTerm('');
+    },
+    [backendAvailable, votesPerPage, sortField, sortDirection, genesis, setBackendAvailable, setLoading, setTotalPages, setVoteList, setWeightedVoteCounts]
+  );
+  
+  React.useEffect(() => {
+    if (genesis) loadVotes(currentPage, searchTerm);
+  }, [backendAvailable, genesis, currentPage, filter, votesPerPage, sortField, sortDirection, loadVotes]);
 
-    if (genesis) loadVotes(currentPage);
-  }, [backendAvailable, genesis, currentPage, filter, votesPerPage, sortField, sortDirection]);
+  const handleStartSearch = (e) => {
+    setStatus("searching")
+    setTitleSearchVisible(false);
+    setCurrentPage(1);
+    loadVotes(1, searchTerm);
+  };
 
   const handlePageSizeChange = (e) => {
     setVotesPerPage(parseInt(e.target.value, 10));
     setCurrentPage(1);
   };
+  
 
   const handleSortChange = (field) => {
     setSortField(field);
@@ -273,8 +291,7 @@ function VotingPageComponent() {
   const handleRefresh = () => {
     window.location.reload();
   };
-
-
+  
   return (
     <Panel title="Nexus Community On-Chain Voting - Issues Available" icon={{ url: 'voting.svg', id: 'icon' }}>
       <FieldSet style={{ position: 'relative', padding: '2em 1em 1em 1em' }}>
@@ -286,6 +303,11 @@ function VotingPageComponent() {
           zIndex: 2,
           cursor: 'pointer'
         }}>
+          <Tooltip.Trigger tooltip="Search for a Title">
+            <Link onClick={() => setTitleSearchVisible(true)} style={{ marginRight: '1rem' }}>
+              <img src='binoculars.svg' height='32px' /> 
+            </Link>
+          </Tooltip.Trigger>
           <Tooltip.Trigger tooltip="Display the User Guide">
             <Link to={`/userguide`} style={{ marginRight: '1rem' }}>
               <img src='document.svg' height='32px' /> 
@@ -297,6 +319,51 @@ function VotingPageComponent() {
             </Link>
           </Tooltip.Trigger>
         </div>
+        {titleSearchVisible && (
+          <div
+            id="titleSearchEntryDialogOverlay"
+            style={{
+              position: 'fixed',
+              top: 0,
+              left: 0,
+              width: '100vw',
+              height: '100vh',
+              background: 'rgba(0,0,0,0.4)', // semi-transparent background
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              zIndex: 9999
+            }}
+          >
+            <div
+              id="titleSearchEntryDialog"
+              style={{
+                background: 'white',
+                padding: '2em 2.5em',
+                border: '2px solid #0086d1',
+                borderRadius: '8px',
+                minWidth: '320px',
+                boxShadow: '0 4px 24px rgba(0,0,0,0.18)',
+                textAlign: 'center',
+                zIndex: 10000
+              }}
+            >
+              <div style={{ marginBottom: '1em' }}>
+                <label htmlFor="searchTermTextField" style={{ marginBottom: '0.25rem', display: 'block', color: 'black' }}>Enter a word to search</label>
+                <TextField label="SearchTerm" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} style={{ color: 'black' }} />
+              </div>
+              <div>
+                <Button onClick={handleStartSearch} style={{ marginRight: '1rem' }}>
+                  Search
+                </Button>
+                <Button onClick={() => setTitleSearchVisible(false)}>
+                  Cancel
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Centered Content */}
         <div style={{
           display: 'flex',
@@ -363,20 +430,50 @@ function VotingPageComponent() {
                   {subscribed ? 'Unsubscribe from Announcements' : 'Subscribe to Announcements'}
                 </Button>
               </div>
-              <div style={{ textAlign: 'center', display: emailVisible ? 'inline' : 'none' }}>
-                <div>
-                  <label htmlFor="emailTextField" style={{ marginBottom: '0.25rem' }}>Email</label>
-                  <TextField label="Email" value={userEmail} onChange={(e) => setUserEmail(e.target.value)} />
+              {emailVisible && (
+                <div
+                  id="emailEntryDialogOverlay"
+                  style={{
+                    position: 'fixed',
+                    top: 0,
+                    left: 0,
+                    width: '100vw',
+                    height: '100vh',
+                    background: 'rgba(0,0,0,0.4)', // semi-transparent background
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    zIndex: 9999
+                  }}
+                >
+                  <div
+                    id="emailEntryDialog"
+                    style={{
+                      background: 'white',
+                      padding: '2em 2.5em',
+                      border: '2px solid #0086d1',
+                      borderRadius: '8px',
+                      minWidth: '320px',
+                      boxShadow: '0 4px 24px rgba(0,0,0,0.18)',
+                      textAlign: 'center',
+                      zIndex: 10000
+                    }}
+                  >
+                    <div style={{ marginBottom: '1em' }}>
+                      <label htmlFor="emailTextField" style={{ marginBottom: '0.25rem', display: 'block', color: 'black' }}>Please enter your email address...</label>
+                      <TextField label="Email" value={userEmail} onChange={(e) => setUserEmail(e.target.value)} style={{ color: 'black' }}/>
+                    </div>
+                    <div>
+                      <Button onClick={handleSubscriptionToggle} disabled={!userEmailValid} style={{ marginRight: '1rem' }}>
+                        Submit
+                      </Button>
+                      <Button onClick={() => setEmailVisible(false)}>
+                        Cancel
+                      </Button>
+                    </div>
+                  </div>
                 </div>
-                <div>
-                  <Button onClick={handleSubscriptionToggle} disabled={!userEmailValid} style={{ marginRight: '1rem' }}>
-                    Submit
-                  </Button>
-                  <Button onClick={() => setEmailVisible(false)}>
-                    Cancel
-                  </Button>
-                </div>
-              </div>
+              )}
             </div>
             {canAccessAdmin && <Button><Link to="/admin" style={{ textDecoration: 'none', color: 'inherit' }}>Enter a New Issue to Vote On</Link></Button>}
           </div>
@@ -398,8 +495,10 @@ function VotingPageComponent() {
       </FieldSet>
       <FieldSet legend='Voting Issues (Filtered & Sorted)' style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1rem' }}>
         <div style={{ display: 'flex', justifyContent: 'center', gap: '1rem', marginBottom: '1rem', marginTop: '1rem' }}>
-          {loading ? (
+          {status === "loading" ? (
             <span style={{ color: 'red' }}>Loading...</span>
+          ) : status === "searching" ? (
+            <span style={{ color: 'red' }}>Searching...</span>
           ) : (
             (() => {
               const filteredVotes = voteList
@@ -432,6 +531,8 @@ function VotingPageComponent() {
                       >
                         <div style={{ flex: 1 }}>
                           <div style={{ fontWeight: 'bold', marginBottom: '0.25rem', color: '#00b7fa' }}>{vote.title}</div>
+                          <div style={{ color: '#aaa' }}>{votingAuthoritySigchain}:{vote.slug}</div>
+                          <div style={{ marginBottom: '0.25rem', color: '#aaa' }}>{vote.address}</div>
                           <div style={{ fontSize: '0.9rem', lineHeight: '1.4' }}>
                             <div>Created On: {new Date(vote.created_at * 1000).toLocaleDateString()}</div>
                             <div>Deadline: {new Date(vote.deadline * 1000).toLocaleDateString()}</div>
@@ -452,16 +553,34 @@ function VotingPageComponent() {
                       </div>
                       {vote.account_addresses && (
                         <ul style={{ fontSize: '0.9rem' }}>
-                          {vote.account_addresses.map((opt, idx) => {
-                            const label = vote.option_labels?.[idx] || `Option ${idx + 1}`;
-                            const addressString = typeof opt === 'string' ? opt : opt.address;
-                            const weightedCount = weightedVoteCounts?.[vote.slug]?.[addressString] ?? 0;
-                            return (
-                              <li key={addressString}>
-                                <strong>{label}</strong>: {(Number(weightedCount) / 1e8).toLocaleString(undefined, { maximumFractionDigits: 2 })} weighted NXS
-                              </li>
-                            );
-                          })}
+                          {(() => {
+                            // Gather all addresses for weighted sum
+                            const optionAddresses = vote.account_addresses?.map(opt => typeof opt === 'string' ? opt : opt.address) || [];
+                            const optionWeightedCounts = optionAddresses.map(addr => weightedVoteCounts?.[vote.slug]?.[addr] ?? 0);
+                            const totalWeighted = optionWeightedCounts.reduce((acc, count) => acc + Number(count), 0);
+
+                            return vote.account_addresses.map((opt, idx) => {
+                              // Use the object's properties
+                              const label = vote.option_labels?.[idx] || `Option ${idx + 1}`;
+                              const name = opt.name || ''; // The option's name (e.g., "opt-yes-dc9d9622")
+                              const address = opt.address || opt; // Support both object and string, just in case
+                              const weightedCount = Number(weightedVoteCounts?.[vote.slug]?.[address] ?? 0);
+                              const percent = totalWeighted > 0 ? (weightedCount / totalWeighted) * 100 : 0;
+                              return (
+                                <li key={address}>
+                                  <div>
+                                    <strong>{label}</strong> <span style={{ color: '#aaa' }}>[{votingAuthoritySigchain}:{name}]</span>
+                                  </div>
+                                  <div style={{ marginLeft: '2em' }}>
+                                    {(weightedCount / 1e8).toLocaleString(undefined, { maximumFractionDigits: 2 })} weighted NXS
+                                    <span style={{ marginLeft: '0.5em', color: '#888' }}>
+                                      ({percent.toFixed(2)}%)
+                                    </span>
+                                  </div>
+                                </li>
+                              );
+                            });
+                          })()}
                         </ul>
                       )}
                       <hr />
