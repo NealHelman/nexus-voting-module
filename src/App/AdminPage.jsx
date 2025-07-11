@@ -1,9 +1,9 @@
 // --- AdminPage.jsx ---  
+import { useDispatch, useSelector } from 'react-redux';
 import { compressToBase64, decompressFromBase64 } from 'lz-string';
 import nexusVotingService from '../services/nexusVotingService';
 import axios from 'axios';
-import { Link, useNavigate, useSearchParams  } from 'react-router-dom';
-import { proxyRequest } from 'nexus-module';
+import { Link, useNavigate, useLocation, useSearchParams  } from 'react-router-dom';
 import { sha256FromFile } from '../utils/ipfs';
 import { copyright } from '../utils/copyright.js';
 import nxsPackage from '../../nxs_package.json' with { type: "json" };
@@ -12,49 +12,106 @@ const { version } = nxsPackage;
 const BACKEND_BASE = 'http://65.20.79.65:4006';
 const React = NEXUS.libraries.React;
 
+
 function AdminPageComponent() {
+  const rehydrated = useSelector(state => state._persist?.rehydrated);
+  
   const {
     components: { TextField, MultilineTextField, Button, Dropdown, FieldSet, Panel, Switch, Tooltip },
-    utilities: { apiCall, secureApiCall, showInfoDialog, showErrorDialog, showSuccessDialog },
+    utilities: { apiCall, proxyRequest, secureApiCall, showInfoDialog, showErrorDialog, showSuccessDialog },
   } = NEXUS;
+  
+  // Admin state from Redux
+  const {
+    adminListFetched,
+    isEditing,
+    editingId,
+    title,
+    description,
+    optionLabels =[],
+    minTrust,
+    voteFinality,
+    organizerName,
+    organizerTelegram,
+    deadline,
+    summaryPro,
+    summaryCon,
+    possibleOutcomes,
+    supportingDocs = [],
+    createdBy,
+    createdAt,
+    creatorGenesis,
+    jsonGuid,
+    analysisGuid,
+    votingAuthoritySigchain,
+    votingAuthorityAccount,
+    namedAssetCost,
+    namedAccountCost,
+    submissionCost
+  } = useSelector(state => state.admin);
 
-  const [title, setTitle] = React.useState('');
-  const [description, setDescription] = React.useState('');
-  const [optionLabels, setOptionLabels] = React.useState(['', '']);
-  const [minTrust, setMinTrust] = React.useState('10000');
-  const [voteFinality, setVoteFinality] = React.useState('one_time');
-  const [organizerName, setOrganizerName] = React.useState('');
-  const [organizerTelegram, setOrganizerTelegram] = React.useState('');
-  const [deadline, setDeadline] = React.useState('');
-  const [summaryPro, setSummaryPro] = React.useState('');
-  const [summaryCon, setSummaryCon] = React.useState('');
-  const [possibleOutcomes, setPossibleOutcomes] = React.useState('');
+  const dispatch = useDispatch();
+
+  // Setters dispatch Redux actions
+  const setAdminListFetched = (value) => dispatch({ type: 'SET_ADMIN_LIST_FETCHED', payload: value });
+
+  // Flags and Miscellaneous
   const [message, setMessage] = React.useState('');
-  const [supportingDocs, setSupportingDocs] = React.useState([]);
-  const [byteCount, setByteCount] = React.useState(0);
-  const [createdBy, setCreatedBy] = React.useState('');
   const [uploadProgress, setUploadProgress] = React.useState({});
-  const [createdAt, setCreatedAt] = React.useState('');
-  const [creatorGenesis, setCreatorGenesis] = React.useState('');
-  const [jsonGuid, setJsonGuid] = React.useState('');
-  const [analysisGuid, setAnalysisGuid] = React.useState('');
-  const [votingAuthoritySigchain, setVotingAuthoritySigchain] = React.useState('');
-  const [votingAuthorityAccount, setVotingAuthorityAccount] = React.useState('');
-  const [namedAssetCost, setNamedAssetCost] = React.useState(0);
-  const [namedAccountCost, setNamedAccountCost] = React.useState(0);
-  const [submissionCost, setSubmissionCost] = React.useState(0);
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const [isUploading, setIsUploading] = React.useState(false);
   const [submitButtonTitle, setSubmitButtonTitle] = React.useState('Submit');
+
+  // User & admin state
+  const setIsEditing = (value) => dispatch({ type: 'SET_IS_EDITING', payload: value });
+  const setEditingId = (value) => dispatch({ type: 'SET_EDITING_ID', payload: value });
+  const setTitle = (value) => dispatch({ type: 'SET_TITLE', payload: value });
+  const setDescription = (value) => dispatch({ type: 'SET_DESCRIPTION', payload: value });
+  const setOptionLabels = (value) => dispatch({ type: 'SET_OPTION_LABELS', payload: value });
+  const setMinTrust = (value) => dispatch({ type: 'SET_MIN_TRUST', payload: value });
+  const setVoteFinality = (value) => dispatch({ type: 'SET_VOTE_FINALITY', payload: value });
+  const setOrganizerName = (value) => dispatch({ type: 'SET_ORGANIZER_NAME', payload: value });
+  const setOrganizerTelegram = (value) => dispatch({ type: 'SET_ORGANIZER_TELEGRAM', payload: value });
+  const setDeadline = (value) => dispatch({ type: 'SET_DEADLINE', payload: value });
+  const setSummaryPro = (value) => dispatch({ type: 'SET_SUMMARY_PRO', payload: value });
+  const setSummaryCon = (value) => dispatch({ type: 'SET_SUMMARY_CON', payload: value });
+  const setPossibleOutcomes = (value) => dispatch({ type: 'SET_POSSIBLE_OUTCOMES', payload: value });
+  const setSupportingDocs = (value) => dispatch({ type: 'SET_SUPPORTING_DOCS', payload: value });
+  const setCreatedBy = (value) => dispatch({ type: 'SET_CREATED_BY', payload: value });
+  const setCreatedAt = (value) => dispatch({ type: 'SET_CREATED_AT', payload: value });
+  const setCreatorGenesis = (value) => dispatch({ type: 'SET_CREATOR_GENESIS', payload: value });
+  const setJsonGuid = (value) => dispatch({ type: 'SET_JSON_GUID', payload: value });
+  const setAnalysisGuid = (value) => dispatch({ type: 'SET_ANALYSIS_GUID', payload: value });
+  const setVotingAuthoritySigchain = (value) => dispatch({ type: 'SET_VOTING_AUTHORITY_SIGCHAIN', payload: value });
+  const setVotingAuthorityAccount = (value) => dispatch({ type: 'SET_VOTING_AUTHORITY_ACCOUNT', payload: value });
+  const setNamedAssetCost = (value) => dispatch({ type: 'SET_NAMED_ASSET_COST', payload: value });
+  const setNamedAccountCost = (value) => dispatch({ type: 'SET_NAMED_ACCOUNT_COST', payload: value });
+  const setSubmissionCost = (value) => dispatch({ type: 'SET_SUBMISSION_COST', payload: value });
   
-  const [searchParams] = useSearchParams();
-  let isEditing = searchParams.has('edit');
-  let editingId = searchParams.get('edit');
   const panelTitle = isEditing
     ? 'Nexus Community On-Chain Voting – Edit Voting Issue'
     : 'Nexus Community On-Chain Voting – Enter New Voting Issue';
   const navigate = useNavigate();
   const fileInputRef = React.useRef();
+
+  const [searchParams] = useSearchParams();
+  const location = useLocation();
+  
+  React.useEffect(() => {
+    if (!rehydrated) return;
+    const inEditMode = searchParams.has('edit');
+    dispatch({ type: 'SET_IS_EDITING', payload: inEditMode });
+    dispatch({ type: 'SET_EDITING_ID', payload: searchParams.get('edit') || '' });
+
+    if (!inEditMode) {
+      const newDeadline = calculateDefaultDeadline();
+      console.log('Setting new deadline:', newDeadline);
+      dispatch({
+        type: 'RESET_ADMIN_FORM',
+        payload: { deadline: newDeadline }
+      });
+    }
+  }, [location.key, rehydrated]);
 
   function formatDateLocal(ts) {
     const date = new Date(ts * 1000);
@@ -94,7 +151,7 @@ function AdminPageComponent() {
     setVoteFinality('one_time');
     setOrganizerName('');
     setOrganizerTelegram('');
-    setDeadline('');
+    setDeadline(calculateDefaultDeadline());
     setSupportingDocs([]);
     setJsonGuid('');
     setAnalysisGuid('');
@@ -127,11 +184,11 @@ function AdminPageComponent() {
       setNamedAssetCost(data.NAMED_ASSET_COST);
       setNamedAccountCost(data.NAMED_ACCOUNT_COST);
     });
-  }, []);
+  }, [adminListFetched]);
 
   React.useEffect(() => {
     setSubmissionCost(namedAssetCost + (namedAccountCost * optionLabels.length));
-  }, [namedAssetCost, namedAccountCost, optionLabels.length]);
+  }, [adminListFetched, namedAssetCost, namedAccountCost, optionLabels.length]);
 
   React.useEffect(() => {
     const getGenesis = async () => {
@@ -152,86 +209,86 @@ function AdminPageComponent() {
 React.useEffect(() => {
   if (!creatorGenesis) return;
 
-  setDeadline(calculateDefaultDeadline());
 
   if (editingId) {
     const fetchAsset = async () => {
-      setSubmitButtonTitle('Update');
-      try {
-        // Fetch the on-chain asset (contains issueInfo, title, deadline, etc)
-        const assetData = await apiCall('assets/get/asset', { verbose: 'summary', address: editingId });
-
-        setTitle(assetData.title || '');
-        setDeadline(assetData.deadline);
-        setCreatorGenesis(assetData.creatorGenesis || null);
-
-        const issueInfoGuid = assetData.issueInfo;
-        setJsonGuid(issueInfoGuid || null);
-
-        if (issueInfoGuid) {
-          // Fetch the off-chain config from your backend (it returns { base64: ... })
-          const { data } = await proxyRequest(`${BACKEND_BASE}/ipfs/fetch/${issueInfoGuid}`, { method: 'GET' });
-
-          try {
-            const jsonStr = atob(data.base64); // base64 decode
-            const config = JSON.parse(jsonStr);
-            
-            console.log('fetchAsset::config: ', config);
-
-            setDescription(config.description || '');
-            setSummaryPro(config.summary_pro || '');
-            setSummaryCon(config.summary_con || '');
-            setPossibleOutcomes(config.possible_outcomes || '');
-            setOptionLabels(config.option_labels || []);
-            setMinTrust(config.min_trust || '');
-            setVoteFinality(config.vote_finality || '');
-            setOrganizerName(config.organizer_name || '');
-            setOrganizerTelegram(config.organizer_telegram || '');
-            setSupportingDocs(config.supporting_docs || []);
-            const analysisGuid = config.supporting_docs?.find(doc => doc.is_analysis)?.guid;
-            setAnalysisGuid(analysisGuid || null);
-          } catch (e) {
-            console.error('Failed to parse base64-encoded JSON:', e);
-          }
-        }
-      } catch (err) {
-        console.error('Failed to load vote asset:', err);
-      }
-    };
-
-    fetchAsset();
-  }
-}, [creatorGenesis, editingId]);
-  
-  React.useEffect(() => {
-    if (!jsonGuid) return;
-    if (editingId) {
-      const fetchSummaries = async () => {
+      if (!adminListFetched) {
+        setSubmitButtonTitle('Update');
         try {
-          const { data } = await proxyRequest(`${BACKEND_BASE}/ipfs/fetch/${jsonGuid}`, { method: 'GET' });
-          console.log('data: ', data);
-          try {
-            const jsonStr = atob(data.base64); // decode base64 to string
-            const parsed = JSON.parse(jsonStr);    // parse JSON
+          // Fetch the on-chain asset (contains issueInfo, title, deadline, etc)
+          const assetData = await apiCall('assets/get/asset', { verbose: 'summary', address: editingId });
 
-            setSummaryPro(parsed.summary_pro || '');
-            setSummaryCon(parsed.summary_con || '');
-            setPossibleOutcomes(parsed.possible_outcomes || '');
-          } catch (e) {
-            console.error('Failed to parse base64-encoded JSON:', e);
+          setTitle(assetData.title || '');
+          setDeadline(assetData.deadline);
+          setCreatorGenesis(assetData.creatorGenesis || null);
+
+          const issueInfoGuid = assetData.issueInfo;
+          setJsonGuid(issueInfoGuid || null);
+
+          if (issueInfoGuid) {
+            // Fetch the off-chain config from your backend (it returns { base64: ... })
+            const { data } = await proxyRequest(`${BACKEND_BASE}/ipfs/fetch/${issueInfoGuid}`, { method: 'GET' });
+
+            try {
+              const jsonStr = atob(data.base64); // base64 decode
+              const config = JSON.parse(jsonStr);
+              
+              console.log('fetchAsset::config: ', config);
+
+              setDescription(config.description || '');
+              setSummaryPro(config.summary_pro || '');
+              setSummaryCon(config.summary_con || '');
+              setPossibleOutcomes(config.possible_outcomes || '');
+              setOptionLabels(config.option_labels || []);
+              setMinTrust(config.min_trust || '');
+              setVoteFinality(config.vote_finality || '');
+              setOrganizerName(config.organizer_name || '');
+              setOrganizerTelegram(config.organizer_telegram || '');
+              setSupportingDocs(config.supporting_docs || []);
+              const analysisGuid = config.supporting_docs?.find(doc => doc.is_analysis)?.guid;
+              setAnalysisGuid(analysisGuid || null);
+            } catch (e) {
+              console.error('Failed to parse base64-encoded JSON:', e);
+            }
           }
         } catch (err) {
           console.error('Failed to load vote asset:', err);
         }
-      };
+      }
+      setAdminListFetched(true);
+    };
 
-      fetchSummaries();
-    }
-  }, [jsonGuid, editingId]);
+    fetchAsset();
+  }
+}, [adminListFetched]);
   
   React.useEffect(() => {
-    console.log('supportingDocs updated: ', supportingDocs);
-  }, [supportingDocs]);
+    if (!jsonGuid) return;
+    if (!adminListFetched) {
+      if (editingId) {
+        const fetchSummaries = async () => {
+          try {
+            const { data } = await proxyRequest(`${BACKEND_BASE}/ipfs/fetch/${jsonGuid}`, { method: 'GET' });
+            console.log('data: ', data);
+            try {
+              const jsonStr = atob(data.base64); // decode base64 to string
+              const parsed = JSON.parse(jsonStr);    // parse JSON
+
+              setSummaryPro(parsed.summary_pro || '');
+              setSummaryCon(parsed.summary_con || '');
+              setPossibleOutcomes(parsed.possible_outcomes || '');
+            } catch (e) {
+              console.error('Failed to parse base64-encoded JSON:', e);
+            }
+          } catch (err) {
+            console.error('Failed to load vote asset:', err);
+          }
+        }
+      }
+    };
+
+    fetchSummaries();
+  }, [adminListFetched]);
   
   const handleFileChange = async (e) => {
     const selectedFiles = Array.from(e.target.files);
@@ -249,8 +306,10 @@ React.useEffect(() => {
       type: file.type
     }));
 
-    setSupportingDocs(prev => [...prev, ...docsWithGuids]);
-    setMessage(`${docsWithGuids.length} file(s) staged for upload. They will be uploaded on submission.`);
+    if (docsWithGuids) {
+      setSupportingDocs(prev => [...prev, ...docsWithGuids]);
+      setMessage(`${docsWithGuids.length} file(s) staged for upload. They will be uploaded on submission.`);
+    }
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 

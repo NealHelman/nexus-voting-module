@@ -194,14 +194,15 @@ function VotingPageComponent() {
   
   // ----------- EFFECT TO LOAD VOTES IF NEEDED -----------
   React.useEffect(() => {
+    console.log('entered handler to load votes');
     if (!rehydrated) return; // Wait for redux-persist to rehydrate
     if (!rehydrated) return; // Wait for redux-persist to rehydrate
     if (
       backendAvailable === true &&
       !voteListFetched &&
-      !!genesis &&
-      (!voteList || voteList.length === 0)
+      !!genesis
     ) {
+      console.log('about to call load votes');
       loadVotes(currentPage, searchTerm);
     }
   }, [
@@ -408,7 +409,7 @@ function VotingPageComponent() {
   
   // ----------- HELPER FUNCTION TO RELOAD THIS PAGE FROM SCRATCH -----------
   const handleRefresh = () => {
-    window.location.reload();
+    setCurrentPage(1);
   };
   
   // ----------- SEND DONATION TO MODULE AUTHOR -----------

@@ -6,11 +6,13 @@ import settings from './settings';
 import ui from './ui';
 
 import voting from './voting';
+import admin from './admin';
 
 export default function createReducer() {
   return function (state, action) {
     const baseReducer = combineReducers({
       voting,
+      admin,
       settings,
       ui,
       nexus: walletDataReducer,
