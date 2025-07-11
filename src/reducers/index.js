@@ -5,9 +5,12 @@ import { walletDataReducer } from 'nexus-module';
 import settings from './settings';
 import ui from './ui';
 
+import voting from './voting';
+
 export default function createReducer() {
   return function (state, action) {
     const baseReducer = combineReducers({
+      voting,
       settings,
       ui,
       nexus: walletDataReducer,

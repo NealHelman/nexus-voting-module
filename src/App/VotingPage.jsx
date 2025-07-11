@@ -13,6 +13,8 @@ const BACKEND_BASE = 'http://65.20.79.65:4006';
 const React = NEXUS.libraries.React;
 
 function VotingPageComponent() {
+  const rehydrated = useSelector(state => state._persist?.rehydrated);
+  
   const {
     components: { Button, Modal, Panel, Dropdown, FieldSet, TextField, Tooltip },
     utilities: { apiCall, confirm, proxyRequest, updateState, secureApiCall, showErrorDialog, showSuccessDialog },
@@ -20,6 +22,7 @@ function VotingPageComponent() {
   
   // Voting state from Redux
   const {
+    voteListFetched,
     currentPage,
     votesPerPage,
     sortField,
@@ -47,52 +50,10 @@ function VotingPageComponent() {
 
   const dispatch = useDispatch();
   
-  React.useEffect(() => {
-    async function restoreVotingState() {
-      // Try to load saved state from Nexus module storage (adjust if needed)
-      let saved = {};
-
-      // Dispatch every known key. Use default values if not present.
-      dispatch({ type: 'SET_CURRENT_PAGE', payload: saved.currentPage ?? 1 });
-      dispatch({ type: 'SET_VOTES_PER_PAGE', payload: saved.votesPerPage ?? 10 });
-      dispatch({ type: 'SET_SORT_FIELD', payload: saved.sortField ?? 'created' });
-      dispatch({ type: 'SET_SORT_DIRECTION', payload: saved.sortDirection ?? 'desc' });
-      dispatch({ type: 'SET_FILTER', payload: saved.filter ?? 'active' });
-      dispatch({ type: 'SET_SEARCH_TERM', payload: saved.searchTerm ?? '' });
-      dispatch({ type: 'SET_VOTE_LIST', payload: saved.voteList ?? [] });
-      dispatch({ type: 'SET_WEIGHTED_VOTE_COUNTS', payload: saved.weightedVoteCounts ?? {} });
-      dispatch({ type: 'SET_VOTE_LIST_META', payload: saved.voteListMeta ?? {
-        currentPage: 1,
-        votesPerPage: 10,
-        sortField: 'created',
-        sortDirection: 'desc',
-        filter: 'active',
-        searchTerm: ''
-      } });
-      dispatch({ type: 'SET_TOTAL_PAGES', payload: saved.totalPages ?? 1 });
-      dispatch({ type: 'SET_GENESIS', payload: saved.genesis ?? '' });
-      dispatch({ type: 'SET_CAN_ACCESS_ADMIN', payload: saved.canAccessAdmin ?? 0 });
-      dispatch({ type: 'SET_SUBSCRIBED', payload: saved.subscribed ?? 1 });
-      dispatch({ type: 'SET_USER_TRUST', payload: saved.userTrust ?? 0 });
-      dispatch({ type: 'SET_USER_WEIGHT', payload: saved.userWeight ?? 0 });
-      dispatch({ type: 'SET_USER_EMAIL', payload: saved.userEmail ?? '' });
-      dispatch({ type: 'SET_USER_VOTES_CAST', payload: saved.userVotesCast ?? 0 });
-      dispatch({ type: 'SET_MIN_TRUST', payload: saved.minTrust ?? 0 });
-      dispatch({ type: 'SET_SENDER_ADDRESS', payload: saved.senderAddress ?? '' });
-      dispatch({ type: 'SET_VOTING_AUTHORITY_SIGCHAIN', payload: saved.votingAuthoritySigchain ?? '' });
-      dispatch({ type: 'SET_VOTING_AUTHORITY_ACCOUNT', payload: saved.votingAuthorityAccount ?? '' });
-      dispatch({ type: 'SET_DONATION_RECIPIENT', payload: saved.donationRecipient ?? '' });
-      dispatch({ type: 'SET_DONATION_AMOUNT', payload: saved.donationAmount ?? 0 });
-
-      setRestoring(false);
-    }
-    restoreVotingState();
-  }, [dispatch]);
-  
   // Setters dispatch Redux actions
+  const setVoteListFetched = (value) => dispatch({ type: 'SET_VOTE_LIST_FETCHED', payload: value });
+
   // All state
-  const [restoring, setRestoring] = React.useState(true);
-  const [voteListFetched, setVoteListFetched] = React.useState(false);
   const [isDonating, setIsDonating] = React.useState(false);
   const [userEmailValid, setUserEmailValid] = React.useState(false);
   const [emailVisible, setEmailVisible] = React.useState(false);
@@ -102,12 +63,30 @@ function VotingPageComponent() {
   const [loading, setLoading] = React.useState(true);
 
   // View state (cache meta)
-  const setCurrentPage = (page) => dispatch({ type: 'SET_CURRENT_PAGE', payload: page });
-  const setVotesPerPage = (page) => dispatch({ type: 'SET_VOTES_PER_PAGE', payload: page });
-  const setSortField = (page) => dispatch({ type: 'SET_SORT_FIELD', payload: page });
-  const setSortDirection = (page) => dispatch({ type: 'SET_SORT_DIRECTION', payload: page });
-  const setFilter = (page) => dispatch({ type: 'SET_FILTER', payload: page });
-  const setSearchTerm = (page) => dispatch({ type: 'SET_SEARCH_TERM', payload: page });
+  const setCurrentPage = (page) => {
+    dispatch({ type: 'SET_CURRENT_PAGE', payload: page });
+    dispatch({ type: 'SET_VOTE_LIST_FETCHED', payload: false });
+  };
+  const setVotesPerPage = (value) => {
+    dispatch({ type: 'SET_VOTES_PER_PAGE', payload: value });
+    dispatch({ type: 'SET_VOTE_LIST_FETCHED', payload: false });
+  };
+  const setSortField = (field) => {
+    dispatch({ type: 'SET_SORT_FIELD', payload: field });
+    dispatch({ type: 'SET_VOTE_LIST_FETCHED', payload: false });
+  };
+  const setSortDirection = (dir) => {
+    dispatch({ type: 'SET_SORT_DIRECTION', payload: dir });
+    dispatch({ type: 'SET_VOTE_LIST_FETCHED', payload: false });
+  };
+  const setFilter = (value) => {
+    dispatch({ type: 'SET_FILTER', payload: value });
+    dispatch({ type: 'SET_VOTE_LIST_FETCHED', payload: false });
+  };
+  const setSearchTerm = (value) => {
+    dispatch({ type: 'SET_SEARCH_TERM', payload: value });
+    // Don't reset voteListFetched here; do it when actually searching (see below)
+  };
 
   // Vote data & meta
   const setVoteList = (page) => dispatch({ type: 'SET_VOTE_LIST', payload: page });
@@ -130,11 +109,15 @@ function VotingPageComponent() {
   const setDonationRecipient = (page) => dispatch({ type: 'SET_DONATION_RECIPIENT', payload: page });
   const setDonationAmount = (page) => dispatch({ type: 'SET_DONATION_AMOUNT', payload: page });
   
+  React.useEffect(() => {
+    console.log('rehydrated:', rehydrated, 'voteListFetched:', voteListFetched, 'voteList:', voteList);
+  }, [rehydrated, voteListFetched, voteList]);
+
   // ----------- LOAD VOTES LOGIC -----------
   const loadVotes = React.useCallback(
     async (page = 1, search = '') => {
       setStatus(search == '' ? "loading" : "searching");
-      if (backendAvailable !== true || restoring) return;
+      if (backendAvailable !== true) return;
       setLoading(true);
 
       const backendListening = await pingBackend();
@@ -194,38 +177,37 @@ function VotingPageComponent() {
           filter,
           searchTerm: search
         });
+        setVoteListFetched(true);
       } catch (e) {
         showErrorDialog({ message: 'Failed to load votes', note: e.message });
       }
 
       setStatus("idle");
       setLoading(false);
-      setVoteListFetched(true);
       setSearchTerm('');
     },
     [
-      backendAvailable, restoring, votesPerPage, sortField, sortDirection,
-      genesis, loading, totalPages, voteList, weightedVoteCounts, filter, loadVotes
+      backendAvailable, votesPerPage, sortField, sortDirection,
+      genesis, loading, totalPages, voteList, weightedVoteCounts, filter
     ]
   );
   
-  // ----------- RESET THE FLAG TO INDICATE THE VOTE LIST SHOULD BE RELOADED -----------
-  React.useEffect(() => {
-    setVoteListFetched(false);
-  }, [currentPage, votesPerPage, sortField, sortDirection, filter, searchTerm]);
-  
   // ----------- EFFECT TO LOAD VOTES IF NEEDED -----------
-  const shouldFetchVotes =
-    !restoring &&
-    backendAvailable === true &&
-    !voteListFetched &&
-    !!genesis;
-
   React.useEffect(() => {
-    if (shouldFetchVotes) {
+    if (!rehydrated) return; // Wait for redux-persist to rehydrate
+    if (!rehydrated) return; // Wait for redux-persist to rehydrate
+    if (
+      backendAvailable === true &&
+      !voteListFetched &&
+      !!genesis &&
+      (!voteList || voteList.length === 0)
+    ) {
       loadVotes(currentPage, searchTerm);
     }
-  }, [shouldFetchVotes, currentPage, votesPerPage, sortField, sortDirection, filter, searchTerm, loadVotes]);
+  }, [
+    rehydrated, backendAvailable, voteListFetched, genesis,
+    voteList, loadVotes, currentPage, searchTerm
+  ]);
   
   // ----------- CHECK TO SEE IF BACKEND IS RESPONDING -----------
   const pingBackend = async () => {
@@ -242,7 +224,7 @@ function VotingPageComponent() {
   
   // ----------- TOGGLE VOTING ISSUE ANNOUNCEMENT EMAIL SUBSCRIPTION STATUS -----------
   const handleSubscriptionToggle = async () => {
-    if (!userEmail || !genesis || backendAvailable !== true || restoring) return;
+    if (!userEmail || !genesis || backendAvailable !== true) return;
     const labelYes = subscribed ? 'Unsubscribe' : 'Subscribe';
     const agreed = await confirm({ 
       question: 'Please confirm your subscription change',
@@ -297,19 +279,19 @@ function VotingPageComponent() {
 
   // ----------- LOAD PROTECTED VALUES -----------
   React.useEffect(() => {
-    if (backendAvailable !== true || restoring) return;
+    if (backendAvailable !== true) return;
     nexusVotingService.getProtectedValues().then(({ data }) => {
       setVotingAuthoritySigchain(data.VOTING_AUTHORITY_SIGCHAIN);
       setVotingAuthorityAccount(data.VOTING_AUTHORITY_ACCOUNT);
       setDonationRecipient(data.DONATION_RECIPIENT);
     });
-  }, [backendAvailable, restoring]);
+  }, [backendAvailable]);
 
   // ----------- GET WALLET USER'S GENESIS -----------
   React.useEffect(() => {
     const getGenesis = async () => {
       if (!genesis) {
-        if (backendAvailable !== true || restoring) return;
+        if (backendAvailable !== true) return;
         try {
           const data = await apiCall("finance/get/account/owner", { name: 'default' });
           const genesis = data?.owner || '';
@@ -323,11 +305,11 @@ function VotingPageComponent() {
       }
     };
     getGenesis();
-  }, [backendAvailable, restoring]);
+  }, [backendAvailable]);
     
     // ----------- GET WALLET USER'S DEFAULT ACCOUNT ADDRESS -----------
     React.useEffect(() => {
-    if (!genesis || backendAvailable !== true || restoring) return;
+    if (!genesis || backendAvailable !== true) return;
 
     const fetchSenderAddress = async () => {
       if (!senderAddress) {
@@ -343,11 +325,11 @@ function VotingPageComponent() {
       }
     };
     fetchSenderAddress();
-  }, [backendAvailable, restoring, genesis]);
+  }, [backendAvailable, genesis]);
 
   // ----------- GET WALLET USER'S SUBSCRIPTION STATUS AND TRUST SCORE -----------
   React.useEffect(() => {
-    if (!genesis || backendAvailable !== true || restoring) return;
+    if (!genesis || backendAvailable !== true) return;
 
     const checkSubscriptionStatus = async () => {
       if (!subscribed) {
@@ -383,7 +365,7 @@ function VotingPageComponent() {
   // ----------- GET WALLET USER'S VOTING HISTORY -----------
   React.useEffect(() => {
     const fetchVotesCast = async () => {
-      if (!genesis || senderAddress == '' || backendAvailable !== true || restoring) return;
+      if (!genesis || senderAddress == '' || backendAvailable !== true) return;
       if (!userVotesCast) {
         const response = await proxyRequest(
           `${BACKEND_BASE}/votes-cast/${genesis}?senderAddress=${encodeURIComponent(senderAddress)}`,
@@ -394,7 +376,7 @@ function VotingPageComponent() {
       }
     };
     fetchVotesCast();
-  }, [backendAvailable, restoring, genesis, senderAddress]);
+  }, [backendAvailable, genesis, senderAddress]);
 
   // ----------- EXPOSE SETTINGS FOR DEBUGGING -----------
   React.useEffect(() => {
@@ -405,6 +387,7 @@ function VotingPageComponent() {
 
   // ----------- HELPER FUNCTION TO INITIATE SEARCH -----------
   const handleStartSearch = (e) => {
+    dispatch({ type: 'SET_VOTE_LIST_FETCHED', payload: false });
     setStatus("searching")
     setTitleSearchVisible(false);
     setCurrentPage(1);
@@ -553,7 +536,7 @@ function VotingPageComponent() {
           <label htmlFor="sortBy" style={{ marginBottom: 'auto', marginTop: 'auto', textAlign: 'center' }}>
             Sort&nbsp;By
             <Dropdown label="SortBy">
-            <select value={sortField} onChange={e => handleSortChange(e.target.value)} style={{ marginLeft: '0.5rem' }}>
+            <select value={sortField} onChange={e => setSortField(e.target.value)} style={{ marginLeft: '0.5rem' }}>
               <option value="created">Created</option>
               <option value="title">Title</option>
               <option value="deadline">Deadline</option>
@@ -572,7 +555,7 @@ function VotingPageComponent() {
           <label htmlFor="pageSize" style={{ marginBottom: 'auto', marginTop: 'auto', textAlign: 'center' }}>
             Page Size:
             <Dropdown label="PageSize">
-            <select value={votesPerPage} onChange={handlePageSizeChange} style={{ marginLeft: '0.5rem' }}>
+            <select value={votesPerPage} onChange={e => setVotesPerPage(parseInt(e.target.value, 10))} style={{ marginLeft: '0.5rem' }}>
                 <option value="3">3</option>
                 <option value="5">5</option>
                 <option value="10">10</option>
