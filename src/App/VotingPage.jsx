@@ -1,6 +1,5 @@
 // --- VotingPage.jsx ---
 import { useDispatch, useSelector } from 'react-redux';
-import { proxyRequest } from 'nexus-module';
 import { Link } from 'react-router-dom';
 import { decompressFromBase64  } from 'lz-string';
 import nexusVotingService from '../services/nexusVotingService';
@@ -16,37 +15,219 @@ const React = NEXUS.libraries.React;
 function VotingPageComponent() {
   const {
     components: { Button, Modal, Panel, Dropdown, FieldSet, TextField, Tooltip },
-    utilities: { apiCall, confirm, showErrorDialog, showSuccessDialog },
+    utilities: { apiCall, confirm, proxyRequest, updateState, secureApiCall, showErrorDialog, showSuccessDialog },
   } = NEXUS;
   
-  const [filter, setFilter] = React.useState('active');
+  // Voting state from Redux
+  const {
+    currentPage,
+    votesPerPage,
+    sortField,
+    sortDirection,
+    filter,
+    searchTerm,
+    voteList,
+    weightedVoteCounts,
+    voteListMeta,
+    totalPages,
+    genesis,
+    canAccessAdmin,
+    subscribed,
+    userTrust,
+    userWeight,
+    userEmail,
+    userVotesCast,
+    minTrust,
+    senderAddress,
+    votingAuthoritySigchain,
+    votingAuthorityAccount,
+    donationRecipient,
+    donationAmount,
+  } = useSelector(state => state.voting);
+
   const dispatch = useDispatch();
-  const [genesis, setGenesis] = React.useState('');
-  const [canAccessAdmin, setCanAccessAdmin] = React.useState(0);
-  const [subscribed, setSubscribed] = React.useState(1);
-  const [userTrust, setUserTrust] = React.useState(0);
-  const [userWeight, setUserWeight] = React.useState(0);
-  const [userEmail, setUserEmail] = React.useState('');
+  
+  React.useEffect(() => {
+    async function restoreVotingState() {
+      // Try to load saved state from Nexus module storage (adjust if needed)
+      let saved = {};
+
+      // Dispatch every known key. Use default values if not present.
+      dispatch({ type: 'SET_CURRENT_PAGE', payload: saved.currentPage ?? 1 });
+      dispatch({ type: 'SET_VOTES_PER_PAGE', payload: saved.votesPerPage ?? 10 });
+      dispatch({ type: 'SET_SORT_FIELD', payload: saved.sortField ?? 'created' });
+      dispatch({ type: 'SET_SORT_DIRECTION', payload: saved.sortDirection ?? 'desc' });
+      dispatch({ type: 'SET_FILTER', payload: saved.filter ?? 'active' });
+      dispatch({ type: 'SET_SEARCH_TERM', payload: saved.searchTerm ?? '' });
+      dispatch({ type: 'SET_VOTE_LIST', payload: saved.voteList ?? [] });
+      dispatch({ type: 'SET_WEIGHTED_VOTE_COUNTS', payload: saved.weightedVoteCounts ?? {} });
+      dispatch({ type: 'SET_VOTE_LIST_META', payload: saved.voteListMeta ?? {
+        currentPage: 1,
+        votesPerPage: 10,
+        sortField: 'created',
+        sortDirection: 'desc',
+        filter: 'active',
+        searchTerm: ''
+      } });
+      dispatch({ type: 'SET_TOTAL_PAGES', payload: saved.totalPages ?? 1 });
+      dispatch({ type: 'SET_GENESIS', payload: saved.genesis ?? '' });
+      dispatch({ type: 'SET_CAN_ACCESS_ADMIN', payload: saved.canAccessAdmin ?? 0 });
+      dispatch({ type: 'SET_SUBSCRIBED', payload: saved.subscribed ?? 1 });
+      dispatch({ type: 'SET_USER_TRUST', payload: saved.userTrust ?? 0 });
+      dispatch({ type: 'SET_USER_WEIGHT', payload: saved.userWeight ?? 0 });
+      dispatch({ type: 'SET_USER_EMAIL', payload: saved.userEmail ?? '' });
+      dispatch({ type: 'SET_USER_VOTES_CAST', payload: saved.userVotesCast ?? 0 });
+      dispatch({ type: 'SET_MIN_TRUST', payload: saved.minTrust ?? 0 });
+      dispatch({ type: 'SET_SENDER_ADDRESS', payload: saved.senderAddress ?? '' });
+      dispatch({ type: 'SET_VOTING_AUTHORITY_SIGCHAIN', payload: saved.votingAuthoritySigchain ?? '' });
+      dispatch({ type: 'SET_VOTING_AUTHORITY_ACCOUNT', payload: saved.votingAuthorityAccount ?? '' });
+      dispatch({ type: 'SET_DONATION_RECIPIENT', payload: saved.donationRecipient ?? '' });
+      dispatch({ type: 'SET_DONATION_AMOUNT', payload: saved.donationAmount ?? 0 });
+
+      setRestoring(false);
+    }
+    restoreVotingState();
+  }, [dispatch]);
+  
+  // Setters dispatch Redux actions
+  // All state
+  const [restoring, setRestoring] = React.useState(true);
+  const [voteListFetched, setVoteListFetched] = React.useState(false);
+  const [isDonating, setIsDonating] = React.useState(false);
   const [userEmailValid, setUserEmailValid] = React.useState(false);
   const [emailVisible, setEmailVisible] = React.useState(false);
-  const [userVotesCast, setUserVotesCast] = React.useState(0);
-  const [weightedVoteCounts, setWeightedVoteCounts] = React.useState({});
-  const [loading, setLoading] = React.useState(true);
-  const [voteList, setVoteList] = React.useState([]);
-  const [minTrust, setMinTrust] = React.useState(0);
-  const [senderAddress, setSenderAddress] = React.useState('');
-  const [votingAuthoritySigchain, setVotingAuthoritySigchain] = React.useState('');
-  const [votingAuthorityAccount, setVotingAuthorityAccount] = React.useState('');
-  const [currentPage, setCurrentPage] = React.useState(1);
-  const [votesPerPage, setVotesPerPage] = React.useState(10);
-  const [totalPages, setTotalPages] = React.useState(1);
-  const [sortField, setSortField] = React.useState('created');
-  const [sortDirection, setSortDirection] = React.useState('desc');
   const [backendAvailable, setBackendAvailable] = React.useState(null);
   const [titleSearchVisible, setTitleSearchVisible] = React.useState(false);
-  const [searchTerm, setSearchTerm] = React.useState('');
   const [status, setStatus] = React.useState("idle");
+  const [loading, setLoading] = React.useState(true);
+
+  // View state (cache meta)
+  const setCurrentPage = (page) => dispatch({ type: 'SET_CURRENT_PAGE', payload: page });
+  const setVotesPerPage = (page) => dispatch({ type: 'SET_VOTES_PER_PAGE', payload: page });
+  const setSortField = (page) => dispatch({ type: 'SET_SORT_FIELD', payload: page });
+  const setSortDirection = (page) => dispatch({ type: 'SET_SORT_DIRECTION', payload: page });
+  const setFilter = (page) => dispatch({ type: 'SET_FILTER', payload: page });
+  const setSearchTerm = (page) => dispatch({ type: 'SET_SEARCH_TERM', payload: page });
+
+  // Vote data & meta
+  const setVoteList = (page) => dispatch({ type: 'SET_VOTE_LIST', payload: page });
+  const setWeightedVoteCounts = (page) => dispatch({ type: 'SET_WEIGHTED_VOTE_COUNTS', payload: page });
+  const setVoteListMeta = (page) => dispatch({ type: 'SET_VOTE_LIST_META', payload: page });
+  const setTotalPages = (page) => dispatch({ type: 'SET_TOTAL_PAGES', payload: page });
+
+  // User & admin state
+  const setGenesis = (page) => dispatch({ type: 'SET_GENESIS', payload: page });
+  const setCanAccessAdmin = (page) => dispatch({ type: 'SET_CAN_ACCESS_ADMIN', payload: page });
+  const setSubscribed = (page) => dispatch({ type: 'SET_SUBSCRIBED', payload: page });
+  const setUserTrust = (page) => dispatch({ type: 'SET_USER_TRUST', payload: page });
+  const setUserWeight = (page) => dispatch({ type: 'SET_USER_WEIGHT', payload: page });
+  const setUserEmail = (page) => dispatch({ type: 'SET_USER_EMAIL', payload: page });
+  const setUserVotesCast = (page) => dispatch({ type: 'SET_USER_VOTES_CAST', payload: page });
+  const setMinTrust = (page) => dispatch({ type: 'SET_MIN_TRUST', payload: page });
+  const setSenderAddress = (page) => dispatch({ type: 'SET_SENDER_ADDRESS', payload: page });
+  const setVotingAuthoritySigchain = (page) => dispatch({ type: 'SET_VOTING_AUTHORITY_SIGCHAIN', payload: page });
+  const setVotingAuthorityAccount = (page) => dispatch({ type: 'SET_VOTING_AUTHORITY_ACCOUNT', payload: page });
+  const setDonationRecipient = (page) => dispatch({ type: 'SET_DONATION_RECIPIENT', payload: page });
+  const setDonationAmount = (page) => dispatch({ type: 'SET_DONATION_AMOUNT', payload: page });
   
+  // ----------- LOAD VOTES LOGIC -----------
+  const loadVotes = React.useCallback(
+    async (page = 1, search = '') => {
+      setStatus(search == '' ? "loading" : "searching");
+      if (backendAvailable !== true || restoring) return;
+      setLoading(true);
+
+      const backendListening = await pingBackend();
+      if (!backendListening) {
+        setBackendAvailable(false);
+        showErrorDialog({ message: 'Backend is not responding. Please try again later.' });
+        setLoading(false);
+        return;
+      } else {
+        setBackendAvailable(true);
+      }
+
+      try {
+        const offset = (page - 1) * votesPerPage;
+        let showMine = '';
+        if (sortField === 'mine') {
+          showMine = `&creatorGenesis=${genesis}`;
+        }
+        let searchTitle = '';
+        if (search !== '') {
+          searchTitle = `&searchTitle=${search}`;
+        }
+        
+        const response = await proxyRequest(
+          `${BACKEND_BASE}/ledger/list/objects/paginated?limit=${votesPerPage}&offset=${offset}&sort=${sortField}&direction=${sortDirection}${showMine}${searchTitle}`,
+          { method: 'GET' }
+        );
+
+        const rawVotes = response.data?.objects || [];
+        const pageCount = Math.ceil((response.data?.total || 1) / votesPerPage);
+        setTotalPages(pageCount);
+
+        const counts = {};
+        const voteCounts = {};
+        for (const vote of rawVotes) {
+          try {
+            const response = await proxyRequest(`${BACKEND_BASE}/weighted-results/${vote.slug}`, { method: 'GET' });
+            counts[vote.slug] = response.data.countResult;
+            voteCounts[vote.slug] = response.data.totalUniqueVotes || 0;
+          } catch (err) {
+            counts[vote.slug] = {};
+            vote.voteCount = voteCounts[vote.slug];
+          }
+        }
+
+        for (const vote of rawVotes) {
+          vote.voteCount = voteCounts[vote.slug] || 0;
+        }
+
+        setVoteList(rawVotes);
+        setWeightedVoteCounts(counts);
+        setVoteListMeta({
+          currentPage: page,
+          votesPerPage,
+          sortField,
+          sortDirection,
+          filter,
+          searchTerm: search
+        });
+      } catch (e) {
+        showErrorDialog({ message: 'Failed to load votes', note: e.message });
+      }
+
+      setStatus("idle");
+      setLoading(false);
+      setVoteListFetched(true);
+      setSearchTerm('');
+    },
+    [
+      backendAvailable, restoring, votesPerPage, sortField, sortDirection,
+      genesis, loading, totalPages, voteList, weightedVoteCounts, filter, loadVotes
+    ]
+  );
+  
+  // ----------- RESET THE FLAG TO INDICATE THE VOTE LIST SHOULD BE RELOADED -----------
+  React.useEffect(() => {
+    setVoteListFetched(false);
+  }, [currentPage, votesPerPage, sortField, sortDirection, filter, searchTerm]);
+  
+  // ----------- EFFECT TO LOAD VOTES IF NEEDED -----------
+  const shouldFetchVotes =
+    !restoring &&
+    backendAvailable === true &&
+    !voteListFetched &&
+    !!genesis;
+
+  React.useEffect(() => {
+    if (shouldFetchVotes) {
+      loadVotes(currentPage, searchTerm);
+    }
+  }, [shouldFetchVotes, currentPage, votesPerPage, sortField, sortDirection, filter, searchTerm, loadVotes]);
+  
+  // ----------- CHECK TO SEE IF BACKEND IS RESPONDING -----------
   const pingBackend = async () => {
     try {
       const response = await fetch(`${BACKEND_BASE}/ping`);
@@ -59,8 +240,9 @@ function VotingPageComponent() {
     }
   };
   
+  // ----------- TOGGLE VOTING ISSUE ANNOUNCEMENT EMAIL SUBSCRIPTION STATUS -----------
   const handleSubscriptionToggle = async () => {
-    if (!userEmail || !genesis || backendAvailable !== true) return;
+    if (!userEmail || !genesis || backendAvailable !== true || restoring) return;
     const labelYes = subscribed ? 'Unsubscribe' : 'Subscribe';
     const agreed = await confirm({ 
       question: 'Please confirm your subscription change',
@@ -95,6 +277,7 @@ function VotingPageComponent() {
     }
   };
   
+  // ----------- EMAIL FORMAT VALIDATION HELPER FUNCTION -----------
   React.useEffect(() => {
     const isValidEmail = async () => {
       if (!userEmail) return;
@@ -103,6 +286,7 @@ function VotingPageComponent() {
     isValidEmail();
   }, [userEmail]);
   
+  // ----------- PROVIDE TIMING/TRIGGERING FOR BACKEND HEALTH CHECK -----------
   React.useEffect(() => {
     const checkBackend = async () => {
       const available = await pingBackend();
@@ -111,70 +295,84 @@ function VotingPageComponent() {
     checkBackend();
   }, []);
 
+  // ----------- LOAD PROTECTED VALUES -----------
   React.useEffect(() => {
-    if (backendAvailable !== true) return;
+    if (backendAvailable !== true || restoring) return;
     nexusVotingService.getProtectedValues().then(({ data }) => {
       setVotingAuthoritySigchain(data.VOTING_AUTHORITY_SIGCHAIN);
       setVotingAuthorityAccount(data.VOTING_AUTHORITY_ACCOUNT);
+      setDonationRecipient(data.DONATION_RECIPIENT);
     });
-  }, [backendAvailable]);
+  }, [backendAvailable, restoring]);
 
+  // ----------- GET WALLET USER'S GENESIS -----------
   React.useEffect(() => {
     const getGenesis = async () => {
-      try {
-        const data = await apiCall("finance/get/account/owner", { name: 'default' });
-        const genesis = data?.owner || '';
-        setGenesis(genesis);
-      } catch (e) {
-        showErrorDialog({
-          message: 'Failed to retrieve genesis',
-          note: e.message
-        });
+      if (!genesis) {
+        if (backendAvailable !== true || restoring) return;
+        try {
+          const data = await apiCall("finance/get/account/owner", { name: 'default' });
+          const genesis = data?.owner || '';
+          setGenesis(genesis);
+        } catch (e) {
+          showErrorDialog({
+            message: 'Failed to retrieve genesis',
+            note: e.message
+          });
+        }
       }
     };
     getGenesis();
-  }, [backendAvailable]);
+  }, [backendAvailable, restoring]);
     
-  React.useEffect(() => {
-    if (!genesis || backendAvailable !== true) return;
+    // ----------- GET WALLET USER'S DEFAULT ACCOUNT ADDRESS -----------
+    React.useEffect(() => {
+    if (!genesis || backendAvailable !== true || restoring) return;
 
     const fetchSenderAddress = async () => {
-      try {
-        const address = await apiCall('finance/get/account/address', {
-          name: 'default'
-        });
-        setSenderAddress(address.address);
-      } catch (e) {
-        console.error('Failed to fetch your default account address:', e);
-        setSenderAddress('');
+      if (!senderAddress) {
+        try {
+          const address = await apiCall('finance/get/account/address', {
+            name: 'default'
+          });
+          setSenderAddress(address.address);
+        } catch (e) {
+          console.error('Failed to fetch your default account address:', e);
+          setSenderAddress('');
+        }
       }
     };
     fetchSenderAddress();
-  }, [backendAvailable, genesis]);
+  }, [backendAvailable, restoring, genesis]);
 
+  // ----------- GET WALLET USER'S SUBSCRIPTION STATUS AND TRUST SCORE -----------
   React.useEffect(() => {
-    if (!genesis || backendAvailable !== true) return;
+    if (!genesis || backendAvailable !== true || restoring) return;
 
     const checkSubscriptionStatus = async () => {
-      try {
-        const response = await proxyRequest(`${BACKEND_BASE}/subscription-status/${genesis}`, { method: 'GET' });
-        setSubscribed(response.data.subscribed);
-      } catch (e) {
-        console.error('Failed to check subscription status:', e);
+      if (!subscribed) {
+        try {
+          const response = await proxyRequest(`${BACKEND_BASE}/subscription-status/${genesis}`, { method: 'GET' });
+          setSubscribed(response.data.subscribed);
+        } catch (e) {
+          console.error('Failed to check subscription status:', e);
+        }
       }
     };
 
     const checkTrust = async () => {
-      try {
-        const response = await apiCall('finance/list/trust/trust,stake', { name: 'trust' });
-        const trust = response?.[0]?.trust || 0;
-        const stake = response?.[0]?.stake || 0;
-        setUserTrust(trust);
-        setUserWeight(trust * stake);
-        if (trust >= minTrust) setCanAccessAdmin(1);
-      } catch (e) {
-        showErrorDialog({ message: 'Failed to retrieve trust level', note: e.message });
-        setCanAccessAdmin(0);
+      if (!userTrust && !userWeight) {
+        try {
+          const response = await apiCall('finance/list/trust/trust,stake', { name: 'trust' });
+          const trust = response?.[0]?.trust || 0;
+          const stake = response?.[0]?.stake || 0;
+          setUserTrust(trust);
+          setUserWeight(trust * stake);
+          if (trust >= minTrust) setCanAccessAdmin(1);
+        } catch (e) {
+          showErrorDialog({ message: 'Failed to retrieve trust level', note: e.message });
+          setCanAccessAdmin(0);
+        }
       }
     };
 
@@ -182,94 +380,30 @@ function VotingPageComponent() {
     checkTrust();
   }, [backendAvailable, genesis, minTrust, senderAddress]);
 
+  // ----------- GET WALLET USER'S VOTING HISTORY -----------
   React.useEffect(() => {
     const fetchVotesCast = async () => {
-      if (!genesis || senderAddress == '' || backendAvailable !== true) return; // wait until both are available
-      const response = await proxyRequest(
-        `${BACKEND_BASE}/votes-cast/${genesis}?senderAddress=${encodeURIComponent(senderAddress)}`,
-        { method: 'GET' }
-      );
-      console.log('fetchVotesCast::response', response);
-      setUserVotesCast(response.data.votesCast || 0);
+      if (!genesis || senderAddress == '' || backendAvailable !== true || restoring) return;
+      if (!userVotesCast) {
+        const response = await proxyRequest(
+          `${BACKEND_BASE}/votes-cast/${genesis}?senderAddress=${encodeURIComponent(senderAddress)}`,
+          { method: 'GET' }
+        );
+        console.log('fetchVotesCast::response', response);
+        setUserVotesCast(response.data.votesCast || 0);
+      }
     };
     fetchVotesCast();
-  }, [backendAvailable, genesis, senderAddress]);
+  }, [backendAvailable, restoring, genesis, senderAddress]);
 
+  // ----------- EXPOSE SETTINGS FOR DEBUGGING -----------
   React.useEffect(() => {
     const debugValues = { genesis, filter, sortDirection, userTrust, minTrust, subscribed, senderAddress, weightedVoteCounts };
     console.log('Updating window.myModuleDebug:', debugValues);
     window.myModuleDebug = debugValues;
   }, [genesis, filter, sortDirection, userTrust, minTrust, subscribed, senderAddress, weightedVoteCounts]);
 
-  const loadVotes = React.useCallback(
-    async (page = 1, search = '') => {
-      setStatus(search ? "searching" : "loading");
-      if (backendAvailable !== true) return;
-      setLoading(true);
-
-      const backendListening = await pingBackend();
-      if (!backendListening) {
-        setBackendAvailable(false);
-        showErrorDialog({ message: 'Backend is not responding. Please try again later.' });
-        setLoading(false);
-        return;
-      } else {
-        setBackendAvailable(true);
-      }
-
-      try {
-        const offset = (page - 1) * votesPerPage;
-        let showMine = '';
-        if (sortField === 'mine') {
-          showMine = `&creatorGenesis=${genesis}`;
-        }
-        let searchTitle = '';
-        if (search !== '') {
-          searchTitle = `&searchTitle=${search}`;
-        }
-        const response = await proxyRequest(
-          `${BACKEND_BASE}/ledger/list/objects/paginated?limit=${votesPerPage}&offset=${offset}&sort=${sortField}&direction=${sortDirection}${showMine}${searchTitle}`,
-          { method: 'GET' }
-        );
-
-        const rawVotes = response.data?.objects || [];
-        const pageCount = Math.ceil((response.data?.total || 1) / votesPerPage);
-        setTotalPages(pageCount);
-
-        const counts = {};
-        const voteCounts = {};
-        for (const vote of rawVotes) {
-          try {
-            const response = await proxyRequest(`${BACKEND_BASE}/weighted-results/${vote.slug}`, { method: 'GET' });
-            counts[vote.slug] = response.data.countResult;
-            voteCounts[vote.slug] = response.data.totalUniqueVotes || 0;
-          } catch (err) {
-            counts[vote.slug] = {};
-            vote.voteCount = voteCounts[vote.slug];
-          }
-        }
-
-        for (const vote of rawVotes) {
-          vote.voteCount = voteCounts[vote.slug] || 0;
-        }
-
-        setVoteList(rawVotes);
-        setWeightedVoteCounts(counts);
-      } catch (e) {
-        showErrorDialog({ message: 'Failed to load votes', note: e.message });
-      }
-
-      setStatus("idle");
-      setLoading(false);
-      setSearchTerm('');
-    },
-    [backendAvailable, votesPerPage, sortField, sortDirection, genesis, setBackendAvailable, setLoading, setTotalPages, setVoteList, setWeightedVoteCounts]
-  );
-  
-  React.useEffect(() => {
-    if (genesis) loadVotes(currentPage, searchTerm);
-  }, [backendAvailable, genesis, currentPage, filter, votesPerPage, sortField, sortDirection, loadVotes]);
-
+  // ----------- HELPER FUNCTION TO INITIATE SEARCH -----------
   const handleStartSearch = (e) => {
     setStatus("searching")
     setTitleSearchVisible(false);
@@ -277,19 +411,71 @@ function VotingPageComponent() {
     loadVotes(1, searchTerm);
   };
 
+  // ----------- HELPER FUNCTION DEALING WITH PAGE SIZE -----------
   const handlePageSizeChange = (e) => {
     setVotesPerPage(parseInt(e.target.value, 10));
     setCurrentPage(1);
   };
   
-
+  // ----------- HELPER FUNCTION DEALING WITH CHANGE IN SORT FIELD -----------
   const handleSortChange = (field) => {
     setSortField(field);
     setCurrentPage(1);
   };
   
+  // ----------- HELPER FUNCTION TO RELOAD THIS PAGE FROM SCRATCH -----------
   const handleRefresh = () => {
     window.location.reload();
+  };
+  
+  // ----------- SEND DONATION TO MODULE AUTHOR -----------
+  const handleDonation = async () => {
+    if (!donationRecipient || !donationAmount) return;
+    try {
+      const response = await secureApiCall('finance/debit/account', {
+        from: senderAddress.address,
+        to: donationRecipient,
+        amount: donationAmount
+        }
+      );
+
+      const result = response.data ?? response;
+
+      // If result is a string, parse and patch
+      let outputObj;
+      if (typeof result === "string") {
+        try {
+          outputObj = JSON.parse(result);
+        } catch (err) {
+          showErrorDialog({
+            message: "Unexpected response format",
+            note: result,
+          });
+          return;
+        }
+      } else {
+        outputObj = result;
+      }
+
+      // Normalize success to 1 if it's boolean true
+      if (outputObj && outputObj.success === true) {
+        outputObj.success = 1;
+      }
+
+      if (!outputObj.success) {
+        showErrorDialog({
+          message: "Donation failed",
+          note: "Maybe try again later?"
+        });
+        return;
+      }
+    } catch (e) {
+      showErrorDialog({
+        message: 'Error during donation',
+        note: e.message
+      });
+      return;
+    }
   };
   
   return (
@@ -563,21 +749,46 @@ function VotingPageComponent() {
           </Button>
         </div>
       </FieldSet>
+      
       <div style={{
-        display: 'flex',
-        justifyContent: 'space-between',
+        display: 'grid',
+        gridTemplateColumns: '1fr auto 1fr',
         alignItems: 'center',
         fontSize: 'small'
       }}>
-        <div>
-          {/* Left-justified content here */}
+        <div style={{ justifySelf: 'start' }}>
           version {version}
         </div>
-        <div>
-          {/* Right-justified content here */}
+        <div style={{ justifySelf: 'center' }}>
+          <Button onClick={() => setIsDonating(true)}>
+            Donate
+          </Button>
+        </div>
+        <div style={{ justifySelf: 'end' }}>
           {copyright}
         </div>
       </div>
+      {isDonating && (
+        <Modal 
+          id="emailEntryDialog" 
+          escToClose={true}
+          removeModal={ () => setIsDonating(false)}
+          style={{ width: '500px' }}
+        >
+          <Modal.Header>Thank you!<br />How many NXS do you wish to donate?</Modal.Header>
+          <Modal.Body>
+            <TextField label="DonationAmount" value={donationAmount} onChange={(e) => setDonationAmount(e.target.value)} style={{ color: 'white' }}/>
+          </Modal.Body>
+          <Modal.Footer>
+            <Button onClick={handleDonation} disabled={!donationAmount} style={{ marginRight: '1rem' }}>
+              Donate
+            </Button>
+            <Button onClick={() => setIsDonating(false)}>
+              Cancel
+            </Button>
+          </Modal.Footer>
+        </Modal>
+      )}
     </Panel>
   );
 }
