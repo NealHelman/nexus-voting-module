@@ -1,5 +1,6 @@
 // --- VotingPage.jsx ---
 import { useDispatch, useSelector } from 'react-redux';
+import { useNavigate } from 'react-router-dom';
 import { Link } from 'react-router-dom';
 import { decompressFromBase64  } from 'lz-string';
 import nexusVotingService from '../services/nexusVotingService';
@@ -29,7 +30,7 @@ function VotingPageComponent() {
     sortDirection,
     filter,
     searchTerm,
-    voteList,
+    voteList = [],
     weightedVoteCounts,
     voteListMeta,
     totalPages,
@@ -49,6 +50,7 @@ function VotingPageComponent() {
   } = useSelector(state => state.voting);
 
   const dispatch = useDispatch();
+  const navigate = useNavigate();
   
   // Setters dispatch Redux actions
   const setVoteListFetched = (value) => dispatch({ type: 'SET_VOTE_LIST_FETCHED', payload: value });
@@ -112,6 +114,13 @@ function VotingPageComponent() {
   React.useEffect(() => {
     console.log('rehydrated:', rehydrated, 'voteListFetched:', voteListFetched, 'voteList:', voteList);
   }, [rehydrated, voteListFetched, voteList]);
+
+  function calculateDefaultDeadline() {
+    const now = new Date();
+    const deadline = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+    deadline.setHours(23, 59, 0, 0); // Set to 23:59:00.000
+    return Math.floor(deadline.getTime() / 1000); // Convert to Unix timestamp
+  };
 
   // ----------- LOAD VOTES LOGIC -----------
   const loadVotes = React.useCallback(
@@ -599,7 +608,13 @@ function VotingPageComponent() {
                 </Modal>
               )}
             </div>
-            {canAccessAdmin && <Button><Link to="/admin" style={{ textDecoration: 'none', color: 'inherit' }}>Enter a New Issue to Vote On</Link></Button>}
+            {canAccessAdmin && 
+            <Button
+              disabled={!rehydrated}
+              onClick={() => navigate('/admin')}
+            >
+              Enter a New Issue to Vote On
+            </Button>}
           </div>
         </div>
       </FieldSet>
@@ -665,13 +680,19 @@ function VotingPageComponent() {
                         </div>
 
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', minWidth: '130px' }}>
-                          <Link to={`/issue?issueId=${vote.address}`}>
-                            <Button style={{ width: '100%' }}>Details/Vote</Button>
-                          </Link>
+                          <Button 
+                            style={{ width: '100%' }}
+                            onClick={() => navigate(`/issue?issueId=${vote.address}`)}
+                          >
+                            Details/Vote
+                          </Button>
                           {vote.creatorGenesis === genesis && (
-                            <Link to={`/admin?edit=${vote.address}`}>
-                              <Button style={{ width: '100%' }}>Edit</Button>
-                            </Link>
+                            <Button 
+                              style={{ width: '100%' }}
+                              onClick={() => navigate(`/admin?edit=${vote.address}`)}
+                            >
+                              Edit
+                            </Button>
                           )}
                         </div>
                       </div>

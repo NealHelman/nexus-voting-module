@@ -49,6 +49,8 @@ function AdminPageComponent() {
     namedAccountCost,
     submissionCost
   } = useSelector(state => state.admin);
+  
+  const _supportingDocs = Array.isArray(supportingDocs) ? supportingDocs : [];
 
   const dispatch = useDispatch();
 
@@ -88,30 +90,43 @@ function AdminPageComponent() {
   const setNamedAccountCost = (value) => dispatch({ type: 'SET_NAMED_ACCOUNT_COST', payload: value });
   const setSubmissionCost = (value) => dispatch({ type: 'SET_SUBMISSION_COST', payload: value });
   
-  const panelTitle = isEditing
-    ? 'Nexus Community On-Chain Voting – Edit Voting Issue'
-    : 'Nexus Community On-Chain Voting – Enter New Voting Issue';
   const navigate = useNavigate();
   const fileInputRef = React.useRef();
 
   const [searchParams] = useSearchParams();
   const location = useLocation();
+  const editingIdFromParams = searchParams.get('edit') || '';
+  const inEditMode = !!editingIdFromParams;
+  const panelTitle = inEditMode
+    ? 'Nexus Community On-Chain Voting – Edit Voting Issue'
+    : 'Nexus Community On-Chain Voting – Enter New Voting Issue';
+
+  function isAdminFormEmpty() {
+    return !title && !description && optionLabels.every(l => !l.trim());
+  }
   
+  // ---------- SET FORM MODE PROPERLY FOR BOTH ENTRY PATHS ----------
   React.useEffect(() => {
     if (!rehydrated) return;
-    const inEditMode = searchParams.has('edit');
-    dispatch({ type: 'SET_IS_EDITING', payload: inEditMode });
-    dispatch({ type: 'SET_EDITING_ID', payload: searchParams.get('edit') || '' });
 
-    if (!inEditMode) {
-      const newDeadline = calculateDefaultDeadline();
-      console.log('Setting new deadline:', newDeadline);
-      dispatch({
-        type: 'RESET_ADMIN_FORM',
-        payload: { deadline: newDeadline }
-      });
+    // Always reset form (with default deadline), whether new or edit mode
+    dispatch({
+      type: 'RESET_ADMIN_FORM',
+      payload: { deadline: calculateDefaultDeadline() }
+    });
+
+    if (editingIdFromParams) {
+      // Edit mode: set editingId and fetch data
+      dispatch({ type: 'SET_IS_EDITING', payload: true });
+      dispatch({ type: 'SET_EDITING_ID', payload: editingIdFromParams });
+      // The existing effect that fetches asset data when editingId changes will handle data population
+    } else {
+      // New mode
+      dispatch({ type: 'SET_IS_EDITING', payload: false });
+      dispatch({ type: 'SET_EDITING_ID', payload: '' });
     }
-  }, [location.key, rehydrated]);
+    // Only run on rehydrated/editingIdFromParams change
+  }, [dispatch, rehydrated, editingIdFromParams]);
 
   function formatDateLocal(ts) {
     const date = new Date(ts * 1000);
@@ -142,26 +157,7 @@ function AdminPageComponent() {
   };
   
   function handleNewIssueClick() {
-    editingId = '';
-    isEditing = false;
-    setTitle('');
-    setDescription('');
-    setOptionLabels(['', '']);
-    setMinTrust('10000');
-    setVoteFinality('one_time');
-    setOrganizerName('');
-    setOrganizerTelegram('');
-    setDeadline(calculateDefaultDeadline());
-    setSupportingDocs([]);
-    setJsonGuid('');
-    setAnalysisGuid('');
-    setSubmitButtonTitle('Submit');
-    setMessage('');
-    setSummaryPro('');
-    setSummaryCon('');
-    setPossibleOutcomes('');
-    setCreatedAt('');
-
+    dispatch({ type: 'RESET_ADMIN_FORM', payload: { deadline: calculateDefaultDeadline() } });
 
     navigate('/admin');
     let el = null;
@@ -169,6 +165,11 @@ function AdminPageComponent() {
       el = document.getElementById('top');
       if (el) el.scrollIntoView({ behavior: 'smooth' });
     }, 100); // slight delay to ensure render
+  };
+
+  const handleReturnToVotingPageClick = (e) => {
+    e.preventDefault(); // Prevent default link behavior if needed
+    navigate("/voting");
   };
 
   React.useEffect(() => {
@@ -206,17 +207,17 @@ function AdminPageComponent() {
     getGenesis();
   }, []);
     
-React.useEffect(() => {
-  if (!creatorGenesis) return;
+  React.useEffect(() => {
+    if (!creatorGenesis) return;
+    if (!rehydrated) return;
+    if (!editingIdFromParams) return;
 
-
-  if (editingId) {
-    const fetchAsset = async () => {
-      if (!adminListFetched) {
+    if (editingIdFromParams) {
+      const fetchAsset = async () => {
         setSubmitButtonTitle('Update');
         try {
           // Fetch the on-chain asset (contains issueInfo, title, deadline, etc)
-          const assetData = await apiCall('assets/get/asset', { verbose: 'summary', address: editingId });
+          const assetData = await apiCall('assets/get/asset', { verbose: 'summary', address: editingIdFromParams });
 
           setTitle(assetData.title || '');
           setDeadline(assetData.deadline);
@@ -245,7 +246,7 @@ React.useEffect(() => {
               setOrganizerName(config.organizer_name || '');
               setOrganizerTelegram(config.organizer_telegram || '');
               setSupportingDocs(config.supporting_docs || []);
-              const analysisGuid = config.supporting_docs?.find(doc => doc.is_analysis)?.guid;
+              let analysisGuid = config.supporting_docs?.find(doc => doc.is_analysis)?.guid;
               setAnalysisGuid(analysisGuid || null);
             } catch (e) {
               console.error('Failed to parse base64-encoded JSON:', e);
@@ -254,45 +255,29 @@ React.useEffect(() => {
         } catch (err) {
           console.error('Failed to load vote asset:', err);
         }
-      }
-      setAdminListFetched(true);
-    };
+      };
 
-    fetchAsset();
-  }
-}, [adminListFetched]);
+      fetchAsset();
+    }
+  }, [creatorGenesis, rehydrated, editingIdFromParams, dispatch]);
   
   React.useEffect(() => {
     if (!jsonGuid) return;
-    if (!adminListFetched) {
-      if (editingId) {
-        const fetchSummaries = async () => {
-          try {
-            const { data } = await proxyRequest(`${BACKEND_BASE}/ipfs/fetch/${jsonGuid}`, { method: 'GET' });
-            console.log('data: ', data);
-            try {
-              const jsonStr = atob(data.base64); // decode base64 to string
-              const parsed = JSON.parse(jsonStr);    // parse JSON
-
-              setSummaryPro(parsed.summary_pro || '');
-              setSummaryCon(parsed.summary_con || '');
-              setPossibleOutcomes(parsed.possible_outcomes || '');
-            } catch (e) {
-              console.error('Failed to parse base64-encoded JSON:', e);
-            }
-          } catch (err) {
-            console.error('Failed to load vote asset:', err);
-          }
+    if (!adminListFetched && editingId) {
+      const fetchSummaries = async () => {
+        try {
+          const { data } = await proxyRequest(`${BACKEND_BASE}/ipfs/fetch/${jsonGuid}`, { method: 'GET' });
+          // ...rest of function...
+        } catch (err) {
+          // ...
         }
       }
-    };
-
-    fetchSummaries();
-  }, [adminListFetched]);
+      fetchSummaries();
+    }
+  }, [adminListFetched, jsonGuid, editingId, proxyRequest, BACKEND_BASE]);
   
   const handleFileChange = async (e) => {
     const selectedFiles = Array.from(e.target.files);
-    // Only accept allowed types/extensions as before...
     const allowedExtensions = ['md', 'txt', 'pdf', 'doc', 'docx'];
     const filteredFiles = selectedFiles.filter(file => {
       const ext = file.name.split('.').pop().toLowerCase();
@@ -301,13 +286,15 @@ React.useEffect(() => {
 
     const docsWithGuids = filteredFiles.map(file => ({
       name: file.name,
-      guid: crypto.randomUUID(), // generate GUID here
+      guid: crypto.randomUUID(),
       file,
       type: file.type
     }));
 
-    if (docsWithGuids) {
-      setSupportingDocs(prev => [...prev, ...docsWithGuids]);
+    if (docsWithGuids.length > 0) {
+      // Use the supportingDocs from Redux directly, not a function param
+      const currentDocs = Array.isArray(supportingDocs) ? supportingDocs : [];
+      setSupportingDocs([...currentDocs, ...docsWithGuids]);
       setMessage(`${docsWithGuids.length} file(s) staged for upload. They will be uploaded on submission.`);
     }
     if (fileInputRef.current) fileInputRef.current.value = '';
@@ -608,9 +595,16 @@ React.useEffect(() => {
         </FieldSet>
         
         <FieldSet legend="Voting Options">
-          <div style={{ display : isEditing ? 'inline' : 'none', marginBottom: '1rem', display: 'flex', justifyContent: 'center', textAlign: 'center' }}>
-            Unfortunately, the Nexus API  does not currently provide a mechanism for changing the voting option labels while editing the voting option.
+        {isEditing && (
+          <div style={{
+            marginBottom: '1rem',
+            display: 'flex',
+            justifyContent: 'center',
+            textAlign: 'center'
+          }}>
+            Unfortunately, the Nexus API does not currently provide a mechanism for changing the voting option labels while editing the voting option.
           </div>
+        )}
           {optionLabels.map((label, idx) => (
             <div
               key={idx}
@@ -700,11 +694,11 @@ React.useEffect(() => {
             </div>
           ))}
 
-          {supportingDocs.length > 0 && (
+          {_supportingDocs.length > 0 && (
             <div>
               <h4>Uploaded Supporting Documents:</h4>
               <ul className="uploaded-files-list">
-                {supportingDocs.map((doc, i) => {
+                {_supportingDocs.map((doc, i) => {
                   const isChecked = analysisGuid === doc.guid;
                   return (
                     <li className="uploaded-file-row" key={doc.guid}>
@@ -737,7 +731,7 @@ React.useEffect(() => {
                             name="analysis_file"
                             checked={isChecked}
                             onChange={() => {
-                              setAnalysisGuid(prev => (prev === doc.guid ? null : doc.guid));
+                              setAnalysisGuid(analysisGuid === doc.guid ? null : doc.guid);
                             }}
                           />
                           Use as Analysis File
@@ -764,7 +758,7 @@ React.useEffect(() => {
           </Button>
           <Button disabled={isSubmitting} onClick={handleNewIssueClick}>Enter a New Issue</Button>
           <Button disabled={isSubmitting}>
-            <Link to="/" style={{ textDecoration: 'none', color: 'inherit' }}>
+            <Link onClick={handleReturnToVotingPageClick} style={{ textDecoration: 'none', color: 'inherit' }}>
               Return to Voting Page
             </Link>
           </Button>

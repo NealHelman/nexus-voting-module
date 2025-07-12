@@ -1,5 +1,5 @@
 import { Link, useNavigate, useSearchParams, useParams } from 'react-router-dom';
-import { proxyRequest } from 'nexus-module';
+import { useDispatch, useSelector } from 'react-redux';
 import { decompressFromBase64 } from 'lz-string';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -9,6 +9,7 @@ import nxsPackage from '../../nxs_package.json' with { type: "json" };
 
 const { version } = nxsPackage;
 const BACKEND_BASE = 'http://65.20.79.65:4006';
+const CACHE_AGE_LIMIT = 5 * 60 * 1000; // 5 minutes
 const React = NEXUS.libraries.React;
 
 function base64ToUint8Array(base64) {
@@ -22,39 +23,104 @@ function base64ToUint8Array(base64) {
 }
 
 function IssuePage() {
+  const rehydrated = useSelector(state => state._persist?.rehydrated);
+
   const {
     components: { Panel, Button, Dropdown, FieldSet, MultilineTextField },
-    utilities: { apiCall, secureApiCall, confirm, showErrorDialog, showSuccessDialog, showInfoDialog },
+    utilities: { apiCall, secureApiCall, confirm, proxyRequest, showErrorDialog, showSuccessDialog, showInfoDialog },
   } = NEXUS;
 
-  const { address } = useParams();
-  const [genesis, setGenesis] = React.useState('');
-  const [votingAuthoritySigchain, setVotingAuthoritySigchain] = React.useState('');
-  const [votingAuthorityAccount, setVotingAuthorityAccount] = React.useState('');
-  const [votingAuthorityGenesis, setVotingAuthorityGenesis] = React.useState('');
-  const [issue, setIssue] = React.useState(null);
-  const [userTrust, setUserTrust] = React.useState(0);
-  const [userWeight, setUserWeight] = React.useState(0);
-  const [userHasEnoughTrustToVote, setUserHasEnoughTrustToVote] = React.useState(false);
-  const [senderAddress, setSenderAddress] = React.useState('');
-  const [userVotesCastOverall, setUserVotesCastOverall] = React.useState(0);
-  const [userCurrentlyVotedOn, setuserCurrentlyVotedOn] = React.useState('');
-  const [userIneligibleToVote, setUserIneligibleToVote] = React.useState(false);
-  const [optionAddresses, setOptionAddresses] = React.useState([]);
-  const [optionVotedOn, setOptionVotedOn] = React.useState(null);
-  const [votingOver, setVotingOver] = React.useState(false);
-  const [jsonGuid, setJsonGuid] = React.useState('');
-  const [summaryPro, setSummaryPro] = React.useState('');
-  const [summaryCon, setSummaryCon] = React.useState('');
-  const [possibleOutcomes, setPossibleOutcomes] = React.useState('');
+  // Issue state from Redux
+  const {
+  issueFetched,
+  issueId,
+  issue = {},
+  issueCache = {},
+  title,
+  description,
+  optionLabels = ['', ''],
+  optionAddresses = [],
+  minTrust,
+  voteFinality,
+  organizerName,
+  organizerTelegram,
+  deadline,
+  summaryPro,
+  summaryCon,
+  possibleOutcomes,
+  supportingDocs = [],
+  createdBy,
+  createdAt,
+  userGenesis,
+  creatorGenesis,
+  analysisGuid,
+  senderAddress,
+  userTrust,
+  userWeight,
+  userHasEnoughTrustToVote,
+  userIneligibleToVote,
+  userCurrentlyVotedOn,
+  userVotesCastOverall,
+  votingOver,
+  optionVotedOn,
+  votingAuthoritySigchain,
+  votingAuthorityAccount,
+  votingAuthorityGenesis
+  } = useSelector(state => state.issue);
+
+  const dispatch = useDispatch();
+
+  // Flags and Miscellaneous
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState('');
   const [docsContent, setDocsContent] = React.useState({});
   const [voteCost, setVoteCost] = React.useState(0.000001);
   const [openDocs, setOpenDocs] = React.useState({});
 
+  // User & issue state
+  const issueCacheEntry = useSelector(state => state.issue.issuesCache?.[issueId] || null);
+  const setIssueFetched = (value) => dispatch({ type: 'SET_ISSUE_FETCHED', payload: value });
+  const setIssueId = (value) => dispatch({ type: 'SET_ISSUE_ID', payload: value });
+  const setTitle = (value) => dispatch({ type: 'SET_TITLE', payload: value });
+  const setDescription = (value) => dispatch({ type: 'SET_DESCRIPTION', payload: value });
+  const setOptionLabels = (value) => dispatch({ type: 'SET_OPTION_LABELS', payload: value });
+  const setOptionAddresses = (value) => dispatch({ type: 'SET_OPTION_ADDRESSES', payload: value });
+  const setMinTrust = (value) => dispatch({ type: 'SET_MIN_TRUST', payload: value });
+  const setVoteFinality = (value) => dispatch({ type: 'SET_VOTE_FINALITY', payload: value });
+  const setOrganizerName = (value) => dispatch({ type: 'SET_ORGANIZER_NAME', payload: value });
+  const setOrganizerTelegram = (value) => dispatch({ type: 'SET_ORGANIZER_TELEGRAM', payload: value });
+  const setDeadline = (value) => dispatch({ type: 'SET_DEADLINE', payload: value });
+  const setSummaryPro = (value) => dispatch({ type: 'SET_SUMMARY_PRO', payload: value });
+  const setSummaryCon = (value) => dispatch({ type: 'SET_SUMMARY_CON', payload: value });
+  const setPossibleOutcomes = (value) => dispatch({ type: 'SET_POSSIBLE_OUTCOMES', payload: value });
+  const setSupportingDocs = (value) => dispatch({ type: 'SET_SUPPORTING_DOCS', payload: value });
+  const setCreatedBy = (value) => dispatch({ type: 'SET_CREATED_BY', payload: value });
+  const setCreatedAt = (value) => dispatch({ type: 'SET_CREATED_AT', payload: value });
+  const setCreatorGenesis = (value) => dispatch({ type: 'SET_CREATOR_GENESIS', payload: value });
+  const setUserGenesis = (value) => dispatch({ type: 'SET_USER_GENESIS', payload: value });
+  const setAnalysisGuid = (value) => dispatch({ type: 'SET_ANALYSIS_GUID', payload: value });
+  const setSenderAddress = (value) => dispatch({ type: 'SET_SENDER_ADDRESS', payload: value });
+  const setUserTrust = (value) => dispatch({ type: 'SET_USER_TRUST', payload: value });
+  const setUserWeight = (value) => dispatch({ type: 'SET_USER_WEIGHT', payload: value });
+  const setUserHasEnoughTrustToVote = (value) => dispatch({ type: 'SET_USER_HAS_ENOUGH_TRUST_TO_VOTE', payload: value });
+  const setUserIneligibleToVote = (value) => dispatch({ type: 'SET_USER_INELGIBLE_TO_VOTE', payload: value });
+  const setUserCurrentlyVotedOn = (value) => dispatch({ type: 'SET_USER_CURRENTLY_VOTED_ON', payload: value });
+  const setUserVotesCastOverall = (value) => dispatch({ type: 'SET_USER_VOTES_CAST_OVERALL', payload: value });
+  const setVotingOver = (value) => dispatch({ type: 'SET_VOTING_OVER', payload: value });
+  const setOptionVotedOn = (value) => dispatch({ type: 'SET_OPTION_VOTED_ON', payload: value });
+  const setVotingAuthoritySigchain = (value) => dispatch({ type: 'SET_VOTING_AUTHORITY_SIGCHAIN', payload: value });
+  const setVotingAuthorityAccount = (value) => dispatch({ type: 'SET_VOTING_AUTHORITY_ACCOUNT', payload: value });
+  const setVotingAuthorityGenesis = (value) => dispatch({ type: 'SET_VOTING_AUTHORITY_GENESIS', payload: value });
+
   const [searchParams] = useSearchParams();
-  const issueId = searchParams.get('issueId');
+  const issueIdFromParam = searchParams.get('issueId');
+
+  React.useEffect(() => {
+    if (issueIdFromParam) {
+      setIssueId(issueIdFromParam);
+    }
+  }, [issueIdFromParam]);
+  
   const panelTitle = "Nexus Community On-Chain Voting - Issue Details & Voting"
 
   function base64ToBlob(base64, mimeType='application/octet-stream') {
@@ -93,6 +159,27 @@ function IssuePage() {
     return 'application/octet-stream';
   }
 
+  // ---------- SET FORM MODE PROPERLY FOR BOTH ENTRY PATHS ----------
+  React.useEffect(() => {
+    if (!rehydrated || !issueId) return;
+
+    if (
+      issueCache &&
+      (Date.now() - issueCache.timestamp < CACHE_AGE_LIMIT)
+    ) {
+      // Use cache
+      dispatch({ type: 'SET_ISSUE', payload: issueCache.data });
+      dispatch({ type: 'SET_ISSUE_FETCHED', payload: true });
+    } else {
+      // Fetch from backend
+      fetchIssue(issueId).then(issueData => {
+        dispatch({ type: 'SET_ISSUE', payload: issueData });
+        dispatch({ type: 'SET_ISSUE_CACHE', payload: { issueId, data: issueData, timestamp: Date.now() } });
+        dispatch({ type: 'SET_ISSUE_FETCHED', payload: true });
+      });
+    }
+  }, [rehydrated, issueId, issueCacheEntry]);
+
   React.useEffect(() => {
     nexusVotingService.getProtectedValues().then(({ data }) => {
       setVotingAuthoritySigchain(data.VOTING_AUTHORITY_SIGCHAIN);
@@ -105,7 +192,7 @@ function IssuePage() {
     const getGenesis = async () => {
       try {
         const data = await apiCall("finance/get/account/owner", { name: 'default' });
-        setGenesis(data?.owner || '');
+        setUserGenesis(data?.owner || '');
       } catch (e) {
         showErrorDialog({
           message: 'Failed to retrieve genesis',
@@ -114,10 +201,10 @@ function IssuePage() {
       }
     };
     getGenesis();
-  }, []);
+  }, [dispatch, rehydrated]);
   
   React.useEffect(() => {
-    if (!genesis) return;
+    if (!userGenesis) return;
       const fetchSenderAddress = async () => {
       try {
         const address = await apiCall('finance/get/account/address', {
@@ -130,10 +217,10 @@ function IssuePage() {
       }
     };
     fetchSenderAddress();
-  }, [genesis]);
+  }, [userGenesis]);
 
   React.useEffect(() => {
-    if (!genesis) return;
+    if (!userGenesis) return;
 
     const checkTrust = async () => {
       try {
@@ -149,9 +236,9 @@ function IssuePage() {
     };
 
     const fetchVotesCastOverall = async () => {
-      if (!genesis || !senderAddress) return; // wait until both are available
+      if (!userGenesis || !senderAddress) return; // wait until both are available
       const response = await proxyRequest(
-        `${BACKEND_BASE}/votes-cast/${genesis}?senderAddress=${encodeURIComponent(senderAddress)}`,
+        `${BACKEND_BASE}/votes-cast/${userGenesis}?senderAddress=${encodeURIComponent(senderAddress)}`,
         { method: 'GET' }
       );
       setUserVotesCastOverall(response.data.votesCast || 0);
@@ -159,21 +246,21 @@ function IssuePage() {
 
     checkTrust();
     fetchVotesCastOverall();
-  }, [genesis, senderAddress]);
+  }, [userGenesis, senderAddress]);
 
   React.useEffect(() => {
-    const debugValues = { genesis, userTrust, senderAddress, issue, optionVotedOn };
+    const debugValues = { userGenesis, userTrust, senderAddress, issue, optionVotedOn };
     console.log('Updating window.myModuleDebug:', debugValues);
     window.myModuleDebug = debugValues;
-  }, [genesis, userTrust, senderAddress, issue, optionVotedOn]);
+  }, [userGenesis, userTrust, senderAddress, issue, optionVotedOn]);
 
   // Fetch the voting issue metadata
-  React.useEffect(() => {
-    async function fetchIssue() {
+  const fetchIssue = React.useCallback(
+    async () => {
       setLoading(true);
       setError('');
       try {
-        // Fetch the asset object by address from backend: TODO - CREATE BACKEND ENDPOINT
+        // Fetch the asset object by address from backend
         const response = await proxyRequest(
           `${BACKEND_BASE}/ledger/object?issueId=${issueId}`,
           { method: 'GET' }
@@ -184,9 +271,8 @@ function IssuePage() {
         setError('Failed to load voting issue: ' + (e.message || e.toString()));
       }
       setLoading(false);
-    }
-    if (issueId) fetchIssue();
-  }, [issueId]);
+    },
+  [issueId]);
   
   React.useEffect(() => {
     const canUserVote = async () => {
@@ -202,7 +288,7 @@ function IssuePage() {
     setOptionAddresses([]);
     setOptionVotedOn(null);
     setUserIneligibleToVote(false);
-    setuserCurrentlyVotedOn('');
+    setUserCurrentlyVotedOn ('');
   }, [issue]);
   
   React.useEffect(() => {
@@ -224,7 +310,7 @@ function IssuePage() {
           });
           if (result.count > 0) {
             votedOn = address;
-            setuserCurrentlyVotedOn(address);
+            setUserCurrentlyVotedOn (address);
             if (issue.vote_finality === 'one_time') ineligible = true;
           }
         } catch (e) {
