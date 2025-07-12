@@ -12,6 +12,7 @@ const initialState = {
   minTrust: '10000',
   voteFinality: 'one_time',
   organizerName: '',
+  organizerEmail: '',
   organizerTelegram: '',
   deadline: '',
   summaryPro: '',
@@ -90,6 +91,8 @@ export default function issue(state = initialState, action) {
       return { ...state, voteFinality: action.payload };
     case 'SET_ORGANIZER_NAME':
       return { ...state, organizerName: action.payload };
+    case 'SET_ORGANIZER_EMAIL':
+      return { ...state, organizerEmail: action.payload };
     case 'SET_ORGANIZER_TELEGRAM':
       return { ...state, organizerTelegram: action.payload };
     case 'SET_DEADLINE':

@@ -10,6 +10,7 @@ const initialState = {
   minTrust: '10000',
   voteFinality: 'one_time',
   organizerName: '',
+  organizerEmail: '',
   organizerTelegram: '',
   deadline: '',
   summaryPro: '',
@@ -42,11 +43,21 @@ export default function admin(state = initialState, action) {
         ...state,
         currentIssue: null,
       };
-    case 'RESET_ADMIN_FORM':
+    case 'RESET_ISSUE_FORM':
       return {
         ...state,
         ...initialState,
-        deadline: action.payload?.deadline ?? '',
+      };
+    case 'SET_ISSUE_CACHE':
+      return {
+        ...state,
+        issuesCache: {
+          ...state.issuesCache,
+          [action.payload.issueId]: {
+            data: action.payload.data,
+            timestamp: action.payload.timestamp
+          }
+        }
       };
     case 'SET_ADMIN_LIST_FETCHED':
       return { ...state, adminListFetched: action.payload };
@@ -66,6 +77,8 @@ export default function admin(state = initialState, action) {
       return { ...state, voteFinality: action.payload };
     case 'SET_ORGANIZER_NAME':
       return { ...state, organizerName: action.payload };
+    case 'SET_ORGANIZER_EMAIL':
+      return { ...state, organizerEmail: action.payload };
     case 'SET_ORGANIZER_TELEGRAM':
       return { ...state, organizerTelegram: action.payload };
     case 'SET_DEADLINE':

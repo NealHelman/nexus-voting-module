@@ -44,6 +44,7 @@ function IssuePage() {
   minTrust,
   voteFinality,
   organizerName,
+  organizerEmail,
   organizerTelegram,
   deadline,
   summaryPro,
@@ -92,6 +93,7 @@ function IssuePage() {
   const setMinTrust = (value) => dispatch({ type: 'SET_MIN_TRUST', payload: value });
   const setVoteFinality = (value) => dispatch({ type: 'SET_VOTE_FINALITY', payload: value });
   const setOrganizerName = (value) => dispatch({ type: 'SET_ORGANIZER_NAME', payload: value });
+  const setOrganizerEmail = (value) => dispatch({ type: 'SET_ORGANIZER_EMAIL', payload: value });
   const setOrganizerTelegram = (value) => dispatch({ type: 'SET_ORGANIZER_TELEGRAM', payload: value });
   const setDeadline = (value) => dispatch({ type: 'SET_DEADLINE', payload: value });
   const setSummaryPro = (value) => dispatch({ type: 'SET_SUMMARY_PRO', payload: value });
@@ -527,6 +529,9 @@ function IssuePage() {
       </div>
       <div>
         <strong>Organizer:</strong> {issue.organizer_name || 'Anonymous'}
+      </div>
+      <div>
+        <strong>Organizer's Email:</strong> {issue.organizer_email || 'Anonymous'}
       </div>
       <div>
         <strong>Organizer's Telegram:</strong> {issue.organizer_telegram || ''}

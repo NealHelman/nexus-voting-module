@@ -301,12 +301,14 @@ function VotingPageComponent() {
 
   // ----------- LOAD PROTECTED VALUES -----------
   React.useEffect(() => {
-    if (backendAvailable !== true) return;
-    nexusVotingService.getProtectedValues().then(({ data }) => {
-      setVotingAuthoritySigchain(data.VOTING_AUTHORITY_SIGCHAIN);
-      setVotingAuthorityAccount(data.VOTING_AUTHORITY_ACCOUNT);
-      setDonationRecipient(data.DONATION_RECIPIENT);
-    });
+    if (!votingAuthoritySigchain) {
+      if (backendAvailable !== true) return;
+      nexusVotingService.getProtectedValues().then(({ data }) => {
+        setVotingAuthoritySigchain(data.VOTING_AUTHORITY_SIGCHAIN);
+        setVotingAuthorityAccount(data.VOTING_AUTHORITY_ACCOUNT);
+        setDonationRecipient(data.DONATION_RECIPIENT);
+      });
+    }
   }, [backendAvailable]);
 
   // ----------- GET WALLET USER'S GENESIS -----------
@@ -402,10 +404,10 @@ function VotingPageComponent() {
 
   // ----------- EXPOSE SETTINGS FOR DEBUGGING -----------
   React.useEffect(() => {
-    const debugValues = { genesis, filter, sortDirection, userTrust, minTrust, subscribed, senderAddress, weightedVoteCounts };
+    const debugValues = { genesis, filter, sortDirection, userTrust, minTrust, subscribed, senderAddress, weightedVoteCounts, voteList };
     console.log('Updating window.myModuleDebug:', debugValues);
     window.myModuleDebug = debugValues;
-  }, [genesis, filter, sortDirection, userTrust, minTrust, subscribed, senderAddress, weightedVoteCounts]);
+  }, [genesis, filter, sortDirection, userTrust, minTrust, subscribed, senderAddress, weightedVoteCounts, voteList]);
 
   // ----------- HELPER FUNCTION TO INITIATE SEARCH -----------
   const handleStartSearch = (e) => {
@@ -728,10 +730,7 @@ function VotingPageComponent() {
                               return (
                                 <li key={address}>
                                   <div>
-                                    <strong>{label}</strong> <span style={{ color: '#aaa' }}>[{votingAuthoritySigchain}:{name}]</span>
-                                  </div>
-                                  <div style={{ marginLeft: '2em' }}>
-                                    {(weightedCount / 1e8).toLocaleString(undefined, { maximumFractionDigits: 2 })} weighted NXS
+                                    <strong>{label}</strong> - {(weightedCount / 1e8).toLocaleString(undefined, { maximumFractionDigits: 2 })} weighted NXS
                                     <span style={{ marginLeft: '0.5em', color: '#888' }}>
                                       ({percent.toFixed(2)}%)
                                     </span>
