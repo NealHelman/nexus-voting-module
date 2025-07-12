@@ -35,7 +35,9 @@ const initialState = {
   optionVotedOn: '',
   votingAuthoritySigchain: '',
   votingAuthorityAccount: '',
-  votingAuthorityGenesis: ''
+  votingAuthorityGenesis: '',
+  donationRecipient:'',
+  donationAmount: 0
 };
 
 export default function issue(state = initialState, action) {
@@ -132,6 +134,10 @@ export default function issue(state = initialState, action) {
       return { ...state, votingAuthoritySigchain: action.payload };
     case 'SET_VOTING_AUTHORITY_GENESIS':
       return { ...state, votingAuthorityGenesis: action.payload };
+    case 'SET_DONATION_RECIPIENT':
+      return { ...state, donationRecipient: action.payload };
+    case 'SET_DONATION_AMOUNT':
+      return { ...state, donationAmount: action.payload };
     default:
       return state;
   }

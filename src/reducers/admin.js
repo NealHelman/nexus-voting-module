@@ -23,6 +23,8 @@ const initialState = {
   analysisGuid: '',
   votingAuthoritySigchain: '',
   votingAuthorityAccount: '',
+  donationRecipient: '',
+  donationAmount: 0,
   namedAssetCost: 0,
   namedAccountCost: 0,
   submissionCost: 0
@@ -90,6 +92,10 @@ export default function admin(state = initialState, action) {
       return { ...state, votingAuthoritySigchain: action.payload };
     case 'SET_VOTING_AUTHORITY_ACCOUNT':
       return { ...state, votingAuthorityAccount: action.payload };
+    case 'SET_DONATION_RECIPIENT':
+      return { ...state, donationRecipient: action.payload };
+    case 'SET_DONATION_AMOUNT':
+      return { ...state, donationAmount: action.payload };
     case 'SET_NAMED_ASSET_COST':
       return { ...state, namedAssetCost: action.payload };
     case 'SET_NAMED_ACCOUNT_COST':

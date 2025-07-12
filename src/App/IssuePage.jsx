@@ -29,8 +29,8 @@ function IssuePage() {
   const { issueId } = useParams();
 
   const {
-    components: { Panel, Button, Dropdown, FieldSet, MultilineTextField },
-    utilities: { apiCall, secureApiCall, confirm, proxyRequest, showErrorDialog, showSuccessDialog, showInfoDialog },
+    components: { Panel, Button, Dropdown, FieldSet, Modal, TextField, Tooltip, MultilineTextField },
+    utilities: { apiCall, copyToClipboard, secureApiCall, confirm, proxyRequest, showErrorDialog, showSuccessDialog, showInfoDialog },
   } = NEXUS;
 
   // Issue state from Redux
@@ -67,7 +67,9 @@ function IssuePage() {
   optionVotedOn,
   votingAuthoritySigchain,
   votingAuthorityAccount,
-  votingAuthorityGenesis
+  votingAuthorityGenesis,
+  donationRecipient,
+  donationAmount
   } = useSelector(state => state.issue);
 
   const dispatch = useDispatch();
@@ -78,6 +80,7 @@ function IssuePage() {
   const [docsContent, setDocsContent] = React.useState({});
   const [voteCost, setVoteCost] = React.useState(0.000001);
   const [openDocs, setOpenDocs] = React.useState({});
+  const [isDonating, setIsDonating] = React.useState(false);
 
   // User & issue state
   const issueCacheEntry = useSelector(state => state.issue.issuesCache?.[issueId] || null);
@@ -113,6 +116,8 @@ function IssuePage() {
   const setVotingAuthoritySigchain = (value) => dispatch({ type: 'SET_VOTING_AUTHORITY_SIGCHAIN', payload: value });
   const setVotingAuthorityAccount = (value) => dispatch({ type: 'SET_VOTING_AUTHORITY_ACCOUNT', payload: value });
   const setVotingAuthorityGenesis = (value) => dispatch({ type: 'SET_VOTING_AUTHORITY_GENESIS', payload: value });
+  const setDonationRecipient = (page) => dispatch({ type: 'SET_DONATION_RECIPIENT', payload: page });
+  const setDonationAmount = (page) => dispatch({ type: 'SET_DONATION_AMOUNT', payload: page });
 
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -426,6 +431,56 @@ function IssuePage() {
     navigate("/voting");
   };
 
+  // ----------- SEND DONATION TO MODULE AUTHOR -----------
+  const handleDonation = async () => {
+    if (!donationRecipient || !donationAmount) return;
+    try {
+      const response = await secureApiCall('finance/debit/account', {
+        from: senderAddress.address,
+        to: donationRecipient,
+        amount: donationAmount
+        }
+      );
+
+      const result = response.data ?? response;
+
+      // If result is a string, parse and patch
+      let outputObj;
+      if (typeof result === "string") {
+        try {
+          outputObj = JSON.parse(result);
+        } catch (err) {
+          showErrorDialog({
+            message: "Unexpected response format",
+            note: result,
+          });
+          return;
+        }
+      } else {
+        outputObj = result;
+      }
+
+      // Normalize success to 1 if it's boolean true
+      if (outputObj && outputObj.success === true) {
+        outputObj.success = 1;
+      }
+
+      if (!outputObj.success) {
+        showErrorDialog({
+          message: "Donation failed",
+          note: "Maybe try again later?"
+        });
+        return;
+      }
+    } catch (e) {
+      showErrorDialog({
+        message: 'Error during donation',
+        note: e.message
+      });
+      return;
+    }
+  };
+  
   if (error) return <Panel title={panelTitle} icon={{ url: 'voting.svg', id: 'icon' }}><p style={{ color: 'red' }}>{error}</p></Panel>;
   if (!currentIssue) return <Panel title={panelTitle} icon={{ url: 'voting.svg', id: 'icon' }}><p>No voting issue found.</p></Panel>;
 
@@ -544,6 +599,84 @@ function IssuePage() {
         </ul>
       </FieldSet>
     )}
+    {/* --- ON-CHAIN ADDRESSES --- */}
+    <FieldSet legend="ON-CHAIN ADDRESSES">
+      <div style={{
+        display: 'flex',
+        justifyContent: 'center',
+        width: '100%'
+      }}>
+        <div style={{
+          textAlign: 'left',
+          width: '100%',
+          maxWidth: 960
+        }}>
+            <div>
+              <strong>Voting Issue Account Name:</strong>
+              <Tooltip.Trigger tooltip="Click to copy to clipboard">
+                <span
+                  onClick={() => copyToClipboard(`${votingAuthoritySigchain}:${issue.slug}`)}
+                  style={{ cursor: 'pointer', color: '#00b7fa', marginLeft: 6 }}
+                >
+                  {votingAuthoritySigchain}:{issue.slug}
+                </span>
+              </Tooltip.Trigger>
+            </div>
+
+            <div style={{ marginBottom: '0.25rem' }}>
+              <strong>Voting Issue Account Address:</strong>
+              <Tooltip.Trigger tooltip="Click to copy to clipboard">
+                <span
+                  onClick={() => copyToClipboard(issue.address)}
+                  style={{ cursor: 'pointer', color: '#00b7fa', marginLeft: 6 }}
+                >
+                  {issue.address}
+                </span>
+              </Tooltip.Trigger>
+            </div>
+
+            {issue.account_addresses && (
+              <ul style={{ fontSize: '0.9rem' }}>
+                {(() => {
+                  return issue.account_addresses.map((opt, idx) => {
+                    // Use the object's properties
+                    const label = issue.option_labels?.[idx] || `Option ${idx + 1}`;
+                    const name = opt.name || ''; // The option's name (e.g., "opt-yes-dc9d9622")
+                    const address = opt.address || opt; // Support both object and string, just in case
+                    return (
+                      <li key={address}>
+                        <div>
+                          <strong>{label} - Voting Option Account Name:</strong>
+                          <Tooltip.Trigger tooltip="Click to copy to clipboard">
+                            <span
+                              onClick={() => copyToClipboard(`${votingAuthoritySigchain}:${name}`)}
+                              style={{ cursor: 'pointer', color: '#00b7fa', marginLeft: 6 }}
+                            >
+                              {votingAuthoritySigchain}:{name}
+                            </span>
+                          </Tooltip.Trigger>
+                        </div>
+
+                        <div style={{ marginBottom: '0.25rem' }}>
+                          <strong><span style={{ color: 'transparent' }}>{label} - </span>Voting Option Account Address:</strong>
+                          <Tooltip.Trigger tooltip="Click to copy to clipboard">
+                            <span
+                              onClick={() => copyToClipboard(issue.address)}
+                              style={{ cursor: 'pointer', color: '#00b7fa', marginLeft: 6 }}
+                            >
+                              {opt.address}
+                            </span>
+                          </Tooltip.Trigger>
+                        </div>
+                      </li>
+                    );
+                  });
+                })()}
+              </ul>
+            )}
+        </div>
+      </div>
+    </FieldSet>
     {/* --- VOTE BUTTONS --- */}
       <FieldSet legend="CAST YOUR VOTE">
         <div style={{ textAlign: 'center' }}>
@@ -596,8 +729,8 @@ function IssuePage() {
         </Button>
       </div>
       <div style={{
-        display: 'flex',
-        justifyContent: 'space-between',
+        display: 'grid',
+        gridTemplateColumns: '1fr auto 1fr',
         alignItems: 'center',
         fontSize: 'small'
       }}>
@@ -605,11 +738,38 @@ function IssuePage() {
           {/* Left-justified content here */}
           version {version}
         </div>
-        <div>
-          {/* Right-justified content here */}
+        <div style={{ justifySelf: 'center' }}>
+          <Button onClick={() => setIsDonating(true)}>
+            Donate
+          </Button>
+        </div>
+        <div style={{ justifySelf: 'end' }}>
           {copyright}
         </div>
-        </div>
+      </div>
+      {isDonating && (
+        <Modal 
+          id="DonationDialog" 
+          escToClose={true}
+          removeModal={ () => setIsDonating(false)}
+          style={{ width: '500px' }}
+        >
+          <Modal.Header>Thank you!<br />How many NXS<br />do you wish to donate?</Modal.Header>
+          <Modal.Body>
+            <TextField label="DonationAmount" value={donationAmount} onChange={(e) => setDonationAmount(e.target.value)} style={{ color: 'white' }}/>
+          </Modal.Body>
+          <Modal.Footer>
+            <div class="Modal__Footer">
+              <Button onClick={handleDonation} disabled={!donationAmount} style={{ marginRight: '1rem' }}>
+                Donate
+              </Button>
+              <Button onClick={() => setIsDonating(false)}>
+                Cancel
+              </Button>
+            </div>
+          </Modal.Footer>
+        </Modal>
+      )}
     </Panel>
   );
 }

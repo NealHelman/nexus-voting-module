@@ -106,3 +106,10 @@ button:hover {
   white-space: -o-pre-wrap;
   word-wrap: break-word;
 }
+
+.Modal__Footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center; /* optional, for vertical alignment */
+  gap: 1rem; /* optional, for spacing between buttons */
+}

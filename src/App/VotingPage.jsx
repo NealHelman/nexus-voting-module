@@ -46,7 +46,7 @@ function VotingPageComponent() {
     votingAuthoritySigchain,
     votingAuthorityAccount,
     donationRecipient,
-    donationAmount,
+    donationAmount
   } = useSelector(state => state.voting);
 
   const dispatch = useDispatch();
@@ -522,12 +522,14 @@ function VotingPageComponent() {
               <TextField label="SearchTerm" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
             </Modal.Body>
             <Modal.Footer>
-              <Button onClick={handleStartSearch} disabled={!searchTerm} style={{ marginRight: '1rem' }}>
-                Search
-              </Button>
-              <Button onClick={() => setTitleSearchVisible(false)}>
-                Cancel
-              </Button>
+              <div class="Modal__Footer">
+                <Button onClick={handleStartSearch} disabled={!searchTerm} style={{ marginRight: '1rem' }}>
+                  Search
+                </Button>
+                <Button onClick={() => setTitleSearchVisible(false)}>
+                  Cancel
+                </Button>
+              </div>
             </Modal.Footer>
           </Modal>
         )}
@@ -610,12 +612,14 @@ function VotingPageComponent() {
                     <TextField label="Email" value={userEmail} onChange={(e) => setUserEmail(e.target.value)} style={{ color: 'white' }}/>
                   </Modal.Body>
                   <Modal.Footer>
-                    <Button onClick={handleSubscriptionToggle} disabled={!userEmailValid} style={{ marginRight: '1rem' }}>
-                      Submit
-                    </Button>
-                    <Button onClick={() => setEmailVisible(false)}>
-                      Cancel
-                    </Button>
+                    <div class="Modal__Footer">
+                      <Button onClick={handleSubscriptionToggle} disabled={!userEmailValid} style={{ marginRight: '1rem' }}>
+                        Submit
+                      </Button>
+                      <Button onClick={() => setEmailVisible(false)}>
+                        Cancel
+                      </Button>
+                    </div>
                   </Modal.Footer>
                 </Modal>
               )}
@@ -682,8 +686,6 @@ function VotingPageComponent() {
                       >
                         <div style={{ flex: 1 }}>
                           <div style={{ fontWeight: 'bold', marginBottom: '0.25rem', color: '#00b7fa' }}>{vote.title}</div>
-                          <div style={{ color: '#aaa' }}>{votingAuthoritySigchain}:{vote.slug}</div>
-                          <div style={{ marginBottom: '0.25rem', color: '#aaa' }}>{vote.address}</div>
                           <div style={{ fontSize: '0.9rem', lineHeight: '1.4' }}>
                             <div>Created On: {new Date(vote.created_at * 1000).toLocaleDateString()}</div>
                             <div>Deadline: {new Date(vote.deadline * 1000).toLocaleDateString()}</div>
@@ -787,22 +789,24 @@ function VotingPageComponent() {
       </div>
       {isDonating && (
         <Modal 
-          id="emailEntryDialog" 
+          id="DonationDialog" 
           escToClose={true}
           removeModal={ () => setIsDonating(false)}
           style={{ width: '500px' }}
         >
-          <Modal.Header>Thank you!<br />How many NXS do you wish to donate?</Modal.Header>
+          <Modal.Header>Thank you!<br />How many NXS<br />do you wish to donate?</Modal.Header>
           <Modal.Body>
             <TextField label="DonationAmount" value={donationAmount} onChange={(e) => setDonationAmount(e.target.value)} style={{ color: 'white' }}/>
           </Modal.Body>
           <Modal.Footer>
-            <Button onClick={handleDonation} disabled={!donationAmount} style={{ marginRight: '1rem' }}>
-              Donate
-            </Button>
-            <Button onClick={() => setIsDonating(false)}>
-              Cancel
-            </Button>
+            <div class="Modal__Footer">
+              <Button onClick={handleDonation} disabled={!donationAmount} style={{ marginRight: '1rem' }}>
+                Donate
+              </Button>
+              <Button onClick={() => setIsDonating(false)}>
+                Cancel
+              </Button>
+            </div>
           </Modal.Footer>
         </Modal>
       )}

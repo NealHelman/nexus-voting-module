@@ -20,7 +20,7 @@ function AdminPageComponent() {
   const { issueId } = useParams();
   
   const {
-    components: { TextField, MultilineTextField, Button, Dropdown, FieldSet, Panel, Switch, Tooltip },
+    components: { TextField, Modal, MultilineTextField, Button, Dropdown, FieldSet, Panel, Switch, Tooltip },
     utilities: { apiCall, proxyRequest, secureApiCall, showInfoDialog, showErrorDialog, showSuccessDialog },
   } = NEXUS;
   
@@ -48,6 +48,8 @@ function AdminPageComponent() {
     analysisGuid,
     votingAuthoritySigchain,
     votingAuthorityAccount,
+    donationRecipient,
+    donationAmount,
     namedAssetCost,
     namedAccountCost,
     submissionCost
@@ -66,6 +68,8 @@ function AdminPageComponent() {
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const [isUploading, setIsUploading] = React.useState(false);
   const [submitButtonTitle, setSubmitButtonTitle] = React.useState('Submit');
+  const [isDonating, setIsDonating] = React.useState(false);
+  const [userEmailValid, setUserEmailValid] = React.useState(false);
 
   // User & admin state
   const setIsEditing = (value) => dispatch({ type: 'SET_IS_EDITING', payload: value });
@@ -92,6 +96,8 @@ function AdminPageComponent() {
   const setNamedAssetCost = (value) => dispatch({ type: 'SET_NAMED_ASSET_COST', payload: value });
   const setNamedAccountCost = (value) => dispatch({ type: 'SET_NAMED_ACCOUNT_COST', payload: value });
   const setSubmissionCost = (value) => dispatch({ type: 'SET_SUBMISSION_COST', payload: value });
+  const setDonationRecipient = (page) => dispatch({ type: 'SET_DONATION_RECIPIENT', payload: page });
+  const setDonationAmount = (page) => dispatch({ type: 'SET_DONATION_AMOUNT', payload: page });
   
   const navigate = useNavigate();
   const fileInputRef = React.useRef();
@@ -528,6 +534,56 @@ function AdminPageComponent() {
     }
   };
   
+  // ----------- SEND DONATION TO MODULE AUTHOR -----------
+  const handleDonation = async () => {
+    if (!donationRecipient || !donationAmount) return;
+    try {
+      const response = await secureApiCall('finance/debit/account', {
+        from: senderAddress.address,
+        to: donationRecipient,
+        amount: donationAmount
+        }
+      );
+
+      const result = response.data ?? response;
+
+      // If result is a string, parse and patch
+      let outputObj;
+      if (typeof result === "string") {
+        try {
+          outputObj = JSON.parse(result);
+        } catch (err) {
+          showErrorDialog({
+            message: "Unexpected response format",
+            note: result,
+          });
+          return;
+        }
+      } else {
+        outputObj = result;
+      }
+
+      // Normalize success to 1 if it's boolean true
+      if (outputObj && outputObj.success === true) {
+        outputObj.success = 1;
+      }
+
+      if (!outputObj.success) {
+        showErrorDialog({
+          message: "Donation failed",
+          note: "Maybe try again later?"
+        });
+        return;
+      }
+    } catch (e) {
+      showErrorDialog({
+        message: 'Error during donation',
+        note: e.message
+      });
+      return;
+    }
+  };
+
   if (!currentIssue) return <Panel title={panelTitle} icon={{ url: 'voting.svg', id: 'icon' }}><p>No voting issue found.</p></Panel>;
 
   return (
@@ -765,8 +821,8 @@ function AdminPageComponent() {
         </div>
       </div>
       <div style={{
-        display: 'flex',
-        justifyContent: 'space-between',
+        display: 'grid',
+        gridTemplateColumns: '1fr auto 1fr',
         alignItems: 'center',
         fontSize: 'small'
       }}>
@@ -774,11 +830,38 @@ function AdminPageComponent() {
           {/* Left-justified content here */}
           version {version}
         </div>
-        <div>
-          {/* Right-justified content here */}
+        <div style={{ justifySelf: 'center' }}>
+          <Button onClick={() => setIsDonating(true)}>
+            Donate
+          </Button>
+        </div>
+        <div style={{ justifySelf: 'end' }}>
           {copyright}
         </div>
       </div>
+      {isDonating && (
+        <Modal 
+          id="DonationDialog" 
+          escToClose={true}
+          removeModal={ () => setIsDonating(false)}
+          style={{ width: '500px' }}
+        >
+          <Modal.Header>Thank you!<br />How many NXS<br />do you wish to donate?</Modal.Header>
+          <Modal.Body>
+            <TextField label="DonationAmount" value={donationAmount} onChange={(e) => setDonationAmount(e.target.value)} style={{ color: 'white' }}/>
+          </Modal.Body>
+          <Modal.Footer>
+            <div class="Modal__Footer">
+              <Button onClick={handleDonation} disabled={!donationAmount} style={{ marginRight: '1rem' }}>
+                Donate
+              </Button>
+              <Button onClick={() => setIsDonating(false)}>
+                Cancel
+              </Button>
+            </div>
+          </Modal.Footer>
+        </Modal>
+      )}
     </Panel>
   );
 }
