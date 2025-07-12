@@ -111,10 +111,6 @@ function VotingPageComponent() {
   const setDonationRecipient = (page) => dispatch({ type: 'SET_DONATION_RECIPIENT', payload: page });
   const setDonationAmount = (page) => dispatch({ type: 'SET_DONATION_AMOUNT', payload: page });
   
-  React.useEffect(() => {
-    console.log('rehydrated:', rehydrated, 'voteListFetched:', voteListFetched, 'voteList:', voteList);
-  }, [rehydrated, voteListFetched, voteList]);
-
   function calculateDefaultDeadline() {
     const now = new Date();
     const deadline = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
@@ -187,6 +183,13 @@ function VotingPageComponent() {
           searchTerm: search
         });
         setVoteListFetched(true);
+        
+        rawVotes.forEach(vote => {
+          dispatch({
+            type: 'SET_ISSUE_CACHE',
+            payload: { issueId: vote.address, data: vote, timestamp: Date.now() }
+          });
+        });
       } catch (e) {
         showErrorDialog({ message: 'Failed to load votes', note: e.message });
       }
@@ -197,7 +200,7 @@ function VotingPageComponent() {
     },
     [
       backendAvailable, votesPerPage, sortField, sortDirection,
-      genesis, loading, totalPages, voteList, weightedVoteCounts, filter
+      genesis, loading, totalPages, weightedVoteCounts, filter
     ]
   );
   
@@ -215,8 +218,7 @@ function VotingPageComponent() {
       loadVotes(currentPage, searchTerm);
     }
   }, [
-    rehydrated, backendAvailable, voteListFetched, genesis,
-    voteList, loadVotes, currentPage, searchTerm
+    rehydrated, backendAvailable, voteListFetched, genesis, currentPage, searchTerm
   ]);
   
   // ----------- CHECK TO SEE IF BACKEND IS RESPONDING -----------
@@ -269,6 +271,16 @@ function VotingPageComponent() {
     }
   };
   
+  // ----------- HAND OFF ISSUE FROM LIST CACHE TO ISSUE CACHE  -----------
+  const handleViewOrEdit = (mode, issueData) => {
+    dispatch({ type: 'SET_CURRENT_ISSUE', payload: { issueId: issueData.address, data: issueData, timestamp: Date.now() } });
+    if (mode == 'edit') {
+      navigate(`/admin?edit=${issueData.address}`);
+    } else {
+      navigate(`/issue/${issueData.address}`);
+    }
+  };
+
   // ----------- EMAIL FORMAT VALIDATION HELPER FUNCTION -----------
   React.useEffect(() => {
     const isValidEmail = async () => {
@@ -682,14 +694,14 @@ function VotingPageComponent() {
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', minWidth: '130px' }}>
                           <Button 
                             style={{ width: '100%' }}
-                            onClick={() => navigate(`/issue?issueId=${vote.address}`)}
+                            onClick={() => handleViewOrEdit('view', vote)}
                           >
                             Details/Vote
                           </Button>
                           {vote.creatorGenesis === genesis && (
                             <Button 
                               style={{ width: '100%' }}
-                              onClick={() => navigate(`/admin?edit=${vote.address}`)}
+                              onClick={() => handleViewOrEdit('edit', vote)}
                             >
                               Edit
                             </Button>

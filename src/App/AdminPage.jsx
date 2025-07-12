@@ -3,7 +3,7 @@ import { useDispatch, useSelector } from 'react-redux';
 import { compressToBase64, decompressFromBase64 } from 'lz-string';
 import nexusVotingService from '../services/nexusVotingService';
 import axios from 'axios';
-import { Link, useNavigate, useLocation, useSearchParams  } from 'react-router-dom';
+import { Link, useNavigate, useLocation, useSearchParams, useParams } from 'react-router-dom';
 import { sha256FromFile } from '../utils/ipfs';
 import { copyright } from '../utils/copyright.js';
 import nxsPackage from '../../nxs_package.json' with { type: "json" };
@@ -15,6 +15,9 @@ const React = NEXUS.libraries.React;
 
 function AdminPageComponent() {
   const rehydrated = useSelector(state => state._persist?.rehydrated);
+  const { currentIssue } = useSelector(state => state.issue);
+  const assetData = currentIssue?.data;
+  const { issueId } = useParams();
   
   const {
     components: { TextField, MultilineTextField, Button, Dropdown, FieldSet, Panel, Switch, Tooltip },
@@ -208,59 +211,54 @@ function AdminPageComponent() {
   }, []);
     
   React.useEffect(() => {
-    if (!creatorGenesis) return;
-    if (!rehydrated) return;
-    if (!editingIdFromParams) return;
+    if (assetData) return;
 
-    if (editingIdFromParams) {
-      const fetchAsset = async () => {
-        setSubmitButtonTitle('Update');
-        try {
-          // Fetch the on-chain asset (contains issueInfo, title, deadline, etc)
-          const assetData = await apiCall('assets/get/asset', { verbose: 'summary', address: editingIdFromParams });
+    const fetchAsset = async () => {
+      setSubmitButtonTitle('Update');
+      try {
+        // Fetch the on-chain asset (contains issueInfo, title, deadline, etc)
+        const response = await apiCall('assets/get/asset', { verbose: 'summary', address: editingIdFromParams });
 
-          setTitle(assetData.title || '');
-          setDeadline(assetData.deadline);
-          setCreatorGenesis(assetData.creatorGenesis || null);
+        setTitle(response.title || '');
+        setDeadline(response.deadline);
+        setCreatorGenesis(response.creatorGenesis || null);
 
-          const issueInfoGuid = assetData.issueInfo;
-          setJsonGuid(issueInfoGuid || null);
+        const issueInfoGuid = response.issueInfo;
+        setJsonGuid(issueInfoGuid || null);
+      } catch (err) {
+        console.error('Failed to load vote asset:', err);
+      }
+    };
 
-          if (issueInfoGuid) {
-            // Fetch the off-chain config from your backend (it returns { base64: ... })
-            const { data } = await proxyRequest(`${BACKEND_BASE}/ipfs/fetch/${issueInfoGuid}`, { method: 'GET' });
-
-            try {
-              const jsonStr = atob(data.base64); // base64 decode
-              const config = JSON.parse(jsonStr);
-              
-              console.log('fetchAsset::config: ', config);
-
-              setDescription(config.description || '');
-              setSummaryPro(config.summary_pro || '');
-              setSummaryCon(config.summary_con || '');
-              setPossibleOutcomes(config.possible_outcomes || '');
-              setOptionLabels(config.option_labels || []);
-              setMinTrust(config.min_trust || '');
-              setVoteFinality(config.vote_finality || '');
-              setOrganizerName(config.organizer_name || '');
-              setOrganizerTelegram(config.organizer_telegram || '');
-              setSupportingDocs(config.supporting_docs || []);
-              let analysisGuid = config.supporting_docs?.find(doc => doc.is_analysis)?.guid;
-              setAnalysisGuid(analysisGuid || null);
-            } catch (e) {
-              console.error('Failed to parse base64-encoded JSON:', e);
-            }
-          }
-        } catch (err) {
-          console.error('Failed to load vote asset:', err);
-        }
-      };
-
-      fetchAsset();
-    }
-  }, [creatorGenesis, rehydrated, editingIdFromParams, dispatch]);
+    fetchAsset();
+  }, [currentIssue, rehydrated, editingIdFromParams]);
   
+  React.useEffect(() => {
+    if (inEditMode && assetData) {
+      setTitle(assetData.title || '');
+      setDescription(assetData.description || '');
+      setOptionLabels(assetData.option_labels || []);
+      setMinTrust(assetData.min_trust || '');
+      setVoteFinality(assetData.vote_finality || 'one_time');
+      setOrganizerName(assetData.organizer_name || '');
+      setOrganizerTelegram(assetData.organizer_telegram || '');
+      setDeadline(assetData.deadline || '');
+      setSummaryPro(assetData.summary_pro || '');
+      setSummaryCon(assetData.summary_con || '');
+      setPossibleOutcomes(assetData.possible_outcomes || '');
+      setSupportingDocs(assetData.supporting_docs || []);
+      setCreatedBy(assetData.created_by || '');
+      setCreatedAt(assetData.created_at || '');
+      setCreatorGenesis(assetData.creatorGenesis || '');
+      setJsonGuid(assetData.issueInfo || '');
+      setVotingAuthoritySigchain(assetData.votingAuthoritySigchain || '');
+      setVotingAuthorityAccount(assetData.votingAuthorityAccount || '');
+      setNamedAssetCost(assetData.namedAssetCost || '');
+      setNamedAccountCost(assetData.namedAccountCost || '');
+      setSubmissionCost(assetData.submissionCost || '');
+    }
+  }, [inEditMode, assetData]);
+
   React.useEffect(() => {
     if (!jsonGuid) return;
     if (!adminListFetched && editingId) {
@@ -529,6 +527,8 @@ function AdminPageComponent() {
       setMessage('Submission complete!');
     }
   };
+  
+  if (!currentIssue) return <Panel title={panelTitle} icon={{ url: 'voting.svg', id: 'icon' }}><p>No voting issue found.</p></Panel>;
 
   return (
     <Panel title={panelTitle} icon={{ url: 'voting.svg', id: 'icon' }}>

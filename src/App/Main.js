@@ -17,7 +17,7 @@ export default function Main() {
       <Route path="/" element={<VotingPage />} />
       <Route path="/voting" element={<VotingPage />} />
       <Route path="/admin" element={<AdminPage />} />
-      <Route path="/issue" element={<IssuePage />} />
+      <Route path="/issue/:issueId" element={<IssuePage />} />
       <Route path="/userguide" element={<UserGuidePage />} />
     </Routes>
   );

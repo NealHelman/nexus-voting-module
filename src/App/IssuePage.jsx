@@ -24,6 +24,9 @@ function base64ToUint8Array(base64) {
 
 function IssuePage() {
   const rehydrated = useSelector(state => state._persist?.rehydrated);
+  const { currentIssue } = useSelector(state => state.issue);
+  const issue = currentIssue?.data;
+  const { issueId } = useParams();
 
   const {
     components: { Panel, Button, Dropdown, FieldSet, MultilineTextField },
@@ -33,8 +36,6 @@ function IssuePage() {
   // Issue state from Redux
   const {
   issueFetched,
-  issueId,
-  issue = {},
   issueCache = {},
   title,
   description,
@@ -53,6 +54,7 @@ function IssuePage() {
   createdAt,
   userGenesis,
   creatorGenesis,
+  jsonGuid,
   analysisGuid,
   senderAddress,
   userTrust,
@@ -80,7 +82,6 @@ function IssuePage() {
   // User & issue state
   const issueCacheEntry = useSelector(state => state.issue.issuesCache?.[issueId] || null);
   const setIssueFetched = (value) => dispatch({ type: 'SET_ISSUE_FETCHED', payload: value });
-  const setIssueId = (value) => dispatch({ type: 'SET_ISSUE_ID', payload: value });
   const setTitle = (value) => dispatch({ type: 'SET_TITLE', payload: value });
   const setDescription = (value) => dispatch({ type: 'SET_DESCRIPTION', payload: value });
   const setOptionLabels = (value) => dispatch({ type: 'SET_OPTION_LABELS', payload: value });
@@ -98,6 +99,7 @@ function IssuePage() {
   const setCreatedAt = (value) => dispatch({ type: 'SET_CREATED_AT', payload: value });
   const setCreatorGenesis = (value) => dispatch({ type: 'SET_CREATOR_GENESIS', payload: value });
   const setUserGenesis = (value) => dispatch({ type: 'SET_USER_GENESIS', payload: value });
+  const setJsonGuid = (value) => dispatch({ type: 'SET_JSON_GUID', payload: value });
   const setAnalysisGuid = (value) => dispatch({ type: 'SET_ANALYSIS_GUID', payload: value });
   const setSenderAddress = (value) => dispatch({ type: 'SET_SENDER_ADDRESS', payload: value });
   const setUserTrust = (value) => dispatch({ type: 'SET_USER_TRUST', payload: value });
@@ -112,8 +114,9 @@ function IssuePage() {
   const setVotingAuthorityAccount = (value) => dispatch({ type: 'SET_VOTING_AUTHORITY_ACCOUNT', payload: value });
   const setVotingAuthorityGenesis = (value) => dispatch({ type: 'SET_VOTING_AUTHORITY_GENESIS', payload: value });
 
+  const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const issueIdFromParam = searchParams.get('issueId');
+  const issueIdFromParam = searchParams.get('edit');
 
   React.useEffect(() => {
     if (issueIdFromParam) {
@@ -164,14 +167,14 @@ function IssuePage() {
     if (!rehydrated || !issueId) return;
 
     if (
-      issueCache &&
-      (Date.now() - issueCache.timestamp < CACHE_AGE_LIMIT)
+      issueCacheEntry  &&
+      (Date.now() - issueCacheEntry .timestamp < CACHE_AGE_LIMIT)
     ) {
       // Use cache
-      dispatch({ type: 'SET_ISSUE', payload: issueCache.data });
+      dispatch({ type: 'SET_ISSUE', payload: issueCacheEntry .data });
       dispatch({ type: 'SET_ISSUE_FETCHED', payload: true });
-    } else {
-      // Fetch from backend
+    } else if (!issueCacheEntry || !issueFetched) {
+      // Only fetch if not already fetched/cached
       fetchIssue(issueId).then(issueData => {
         dispatch({ type: 'SET_ISSUE', payload: issueData });
         dispatch({ type: 'SET_ISSUE_CACHE', payload: { issueId, data: issueData, timestamp: Date.now() } });
@@ -257,22 +260,29 @@ function IssuePage() {
   // Fetch the voting issue metadata
   const fetchIssue = React.useCallback(
     async () => {
+      if (!issue) return;
       setLoading(true);
       setError('');
       try {
-        // Fetch the asset object by address from backend
-        const response = await proxyRequest(
-          `${BACKEND_BASE}/ledger/object?issueId=${issueId}`,
-          { method: 'GET' }
-        );
+        if (currentIssue) {
+          setIssue(currentIssue);
+        } else {
+          const response = await proxyRequest(
+            `${BACKEND_BASE}/ledger/object?issueId=${issueId}`,
+            { method: 'GET' }
+          );
+        }
         console.log('fetchIssue::response: ', response);
         setIssue(response.data);
+
+        const issueInfoGuid = response.data.issueInfo;
+        setJsonGuid(issueInfoGuid || null);
       } catch (e) {
         setError('Failed to load voting issue: ' + (e.message || e.toString()));
       }
       setLoading(false);
     },
-  [issueId]);
+  [currentIssue, issueId]);
   
   React.useEffect(() => {
     const canUserVote = async () => {
@@ -411,9 +421,13 @@ function IssuePage() {
     }));
   };
 
-  if (loading) return <Panel title={panelTitle} icon={{ url: 'voting.svg', id: 'icon' }}><p>Loading voting issue...</p></Panel>;
+  const handleReturnToVotingPageClick = (e) => {
+    e.preventDefault(); // Prevent default link behavior if needed
+    navigate("/voting");
+  };
+
   if (error) return <Panel title={panelTitle} icon={{ url: 'voting.svg', id: 'icon' }}><p style={{ color: 'red' }}>{error}</p></Panel>;
-  if (!issue) return <Panel title={panelTitle} icon={{ url: 'voting.svg', id: 'icon' }}><p>No voting issue found.</p></Panel>;
+  if (!currentIssue) return <Panel title={panelTitle} icon={{ url: 'voting.svg', id: 'icon' }}><p>No voting issue found.</p></Panel>;
 
   return (
     <Panel title={panelTitle} icon={{ url: 'voting.svg', id: 'icon' }}>
@@ -576,7 +590,7 @@ function IssuePage() {
       </FieldSet>
       <div style={{ textAlign: 'center' }}>
         <Button>
-          <Link to="/" style={{ textDecoration: 'none', color: 'inherit' }}>
+          <Link onClick={handleReturnToVotingPageClick} style={{ textDecoration: 'none', color: 'inherit' }}>
             Return to Voting Issue List Page
           </Link>
         </Button>
