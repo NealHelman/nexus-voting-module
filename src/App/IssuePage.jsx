@@ -1,8 +1,7 @@
 import { Link, useNavigate, useSearchParams, useParams } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
 import { decompressFromBase64 } from 'lz-string';
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
+import MarkdownWithZoom from "./MarkdownWithZoom";
 import nexusVotingService from '../services/nexusVotingService';
 import { copyright } from '../utils/copyright.js';
 import nxsPackage from '../../nxs_package.json' with { type: "json" };
@@ -597,12 +596,16 @@ function IssuePage() {
                 {isOpen && (
                   <>
                     {docData.type === 'markdown' && (
-                      <div className='document-display'>
-                        <ReactMarkdown remarkPlugins={[remarkGfm]}>{docData.content}</ReactMarkdown>
+                      <div className="document-display" style={{ fontFamily: 'Times New Roman, Times, serif' }}>
+                        <MarkdownWithZoom>
+                          {docContent}
+                        </MarkdownWithZoom>
                       </div>
                     )}
                     {docData.type === 'text' && (
-                      <pre className='document-display'>{docData.content}</pre>
+                      <div className='document-display'>
+                        <pre>{docData.content}</pre>
+                      </div>
                     )}
                     {docData.type === 'unknown' && (
                       <pre>{docData.content}</pre>

@@ -1,6 +1,6 @@
 # Nexus Community Voting Module
 
-A module for the [Nexus Wallet](https://nexus.io/products) that enables decentralized community voting on proposals, governance issues, and more.
+A module for the [Nexus Wallet](https://nexus.io/wallet) that enables decentralized community voting on proposals, governance issues, and more.
 
 - Nexus Wallet minimum version: 3.2.0
 
@@ -35,9 +35,9 @@ A module for the [Nexus Wallet](https://nexus.io/products) that enables decentra
 
 ### 1. Download & Install
 
-- Download the latest version of the Voting Module from the [GitHub Releases page](https://github.com/[YOUR_ORG]/[YOUR_REPO]/releases/latest).
+- Download the latest version of the Voting Module from the [GitHub Releases page](https://github.com/NealHelman/nexus-voting-module/releases/latest).
 - Extract the module ZIP file.
-- In your Nexus Wallet, go to the Modules section and install the Voting Module.
+- In your Nexus Wallet, go to the Modules section and install the Voting Module. There is no build process.
 
 ### 2. Open the Voting Module
 
@@ -67,7 +67,7 @@ If you have already installed the Voting Module:
 3. Select the current voting issue and cast your vote.
 
 If you haven’t installed the Voting Module yet,  
-- [Download the Voting Module](https://github.com/[YOUR_ORG]/[YOUR_REPO]/releases/latest)
+- [Download the Voting Module](https://github.com/NealHelman/nexus-voting-module/releases/latest)
 - [Nexus Wallet Download & Info](https://nexus.io/products)
 - See the [User Guide](dist/UserGuide.md) for help.
 
@@ -83,7 +83,6 @@ Please open issues or submit pull requests via GitHub.
 ## 📢 Community
 
 - [Nexus Community - General Telegram](https://t.me/NexusCommunity)
-- [Nexus Discord](https://discord.gg/nexus)
 - [Nexus Website](https://nexus.io)
 
 ---

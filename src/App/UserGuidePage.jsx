@@ -1,6 +1,5 @@
 import { Link, useNavigate, useSearchParams, useParams } from 'react-router-dom';
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
+import MarkdownWithZoom from "./MarkdownWithZoom";
 import { copyright } from '../utils/copyright.js';
 import nxsPackage from '../../nxs_package.json' with { type: "json" };
 
@@ -46,19 +45,17 @@ function UserGuidePage() {
         </Button>
       </div>
       <FieldSet legend="User Guide">
-        <div className='document-display'>
-          {loading ? (
-            <div>Loading user guide...</div>
-          ) : error ? (
-            <div style={{ color: 'red' }}>Error: {error}</div>
-          ) : (
-            <div style={{ fontFamily: 'Times New Roman, Times, serif' }}>
-              <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                {docContent}
-              </ReactMarkdown>
-            </div>
-          )}
-        </div>
+        {loading ? (
+          <div>Loading user guide...</div>
+        ) : error ? (
+          <div style={{ color: 'red' }}>Error: {error}</div>
+        ) : (
+          <div className="document-display" style={{ fontFamily: 'Times New Roman, Times, serif' }}>
+            <MarkdownWithZoom>
+              {docContent}
+            </MarkdownWithZoom>
+          </div>
+        )}
       </FieldSet>
       <div style={{ textAlign: 'center' }}>
         <Button>

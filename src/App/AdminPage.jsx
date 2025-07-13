@@ -241,7 +241,7 @@ function AdminPageComponent() {
   }, [currentIssue, rehydrated, editingIdFromParams]);
   
   React.useEffect(() => {
-    if (inEditMode && assetData) {
+    if (editingIdFromParams && assetData) {
       setTitle(assetData.title || '');
       setDescription(assetData.description || '');
       setOptionLabels(assetData.option_labels || []);
@@ -265,8 +265,27 @@ function AdminPageComponent() {
       setNamedAccountCost(assetData.namedAccountCost || '');
       setSubmissionCost(assetData.submissionCost || '');
       setSubmitButtonTitle('Update');
+    } else {
+      setTitle('');
+      setDescription('');
+      setOptionLabels(['', '']);
+      setMinTrust(10000);
+      setVoteFinality('one_time');
+      setOrganizerName('');
+      setOrganizerEmail('');
+      setOrganizerTelegram('');
+      setDeadline(calculateDefaultDeadline());
+      setSummaryPro('');
+      setSummaryCon('');
+      setPossibleOutcomes('');
+      setSupportingDocs([]);
+      setCreatedBy('');
+      setCreatedAt('');
+      setCreatorGenesis('');
+      setJsonGuid('');
+      setSubmitButtonTitle('Submit');
     }
-  }, [inEditMode, assetData]);
+  }, [editingIdFromParams, assetData]);
 
   React.useEffect(() => {
     if (!jsonGuid) return;

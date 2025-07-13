@@ -7,7 +7,7 @@ const initialState = {
   title: '',
   description: '',
   optionLabels: ['', ''],
-  minTrust: '10000',
+  minTrust: 10000,
   voteFinality: 'one_time',
   organizerName: '',
   organizerEmail: '',

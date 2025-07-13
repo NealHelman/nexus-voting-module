@@ -121,6 +121,8 @@ export default function issue(state = initialState, action) {
       return { ...state, senderAddress: action.payload };
     case 'SET_USER_TRUST':
       return { ...state, userTrust: action.payload };
+    case 'SET_USER_WEIGHT':
+      return { ...state, userWeight: action.payload };
     case 'SET_USER_HAS_ENOUGH_TRUST_TO_VOTE':
       return { ...state, userHasEnoughTrustToVote: action.payload };
     case 'SET_USER_INELIGIBLE_TO_VOTE':
