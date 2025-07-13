@@ -2,6 +2,8 @@
 
 A module for the [Nexus Wallet](https://nexus.io/products) that enables decentralized community voting on proposals, governance issues, and more.
 
+- Nexus Wallet minimum version: 3.2.0
+
 ---
 
 ## 📦 Features
@@ -14,6 +16,22 @@ A module for the [Nexus Wallet](https://nexus.io/products) that enables decentra
 ---
 
 ## 🚀 Getting Started
+
+## 🛠️ Building from Source
+
+1. Clone this repository or download the source ZIP.
+2. In your terminal, navigate to the source directory.
+3. Install dependencies:
+   ```bash
+   npm install
+   ```
+4. Build the module:
+   ```bash
+   npm run build
+   ```
+5. The built files will be in the `dist/` folder. You can then install the module in Nexus Wallet (Developer mode may be required).
+
+> **Note:** This repository includes a valid `nxs_package.json` file, as required for Nexus module verification.
 
 ### 1. Download & Install
 
@@ -37,7 +55,6 @@ A module for the [Nexus Wallet](https://nexus.io/products) that enables decentra
 ## 📖 Documentation
 
 - **[User Guide](dist/UserGuide.md):** Comprehensive instructions for using the Voting Module.
-- **[FAQ](dist/UserGuide.md#faq):** Common questions and troubleshooting.
 
 ---
 
