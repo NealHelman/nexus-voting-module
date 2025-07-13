@@ -78,9 +78,9 @@ function IssuePage() {
   // Flags and Miscellaneous
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState('');
-  const [docsContent, setDocsContent] = React.useState({});
+  const [docsContent, setDocsContent] = React.useState([]);
   const [voteCost, setVoteCost] = React.useState(0.000001);
-  const [openDocs, setOpenDocs] = React.useState({});
+  const [openDocs, setOpenDocs] = React.useState([]);
   const [isDonating, setIsDonating] = React.useState(false);
 
   // User & issue state
@@ -348,38 +348,42 @@ function IssuePage() {
   // Fetch supporting docs from backend and decode
   React.useEffect(() => {
     console.log('issue: ', issue);
-    async function fetchDocs() {
+    async function decodeDocs() {
       if (!issue?.supporting_docs?.length) return;
-      setJsonGuid(issue.issue_info_guid || null);
-      
-      const docs = {};
+
+      //'md', 'txt', 'pdf', 'doc', 'docx'
+      const docs = [];
       for (const doc of issue.supporting_docs) {
         try {
-          // Expect doc.guid is present (as written by backend)
-          const res = await fetch(`${BACKEND_BASE}/ipfs/fetch/${doc.guid}`);
-          if (!res.ok) throw new Error('Network error');
-          const { name, base64 } = await res.json();
           let content, type = '';
           // Try to determine type from name or magic
-          if (name.endsWith('.md') || name.endsWith('.markdown')) {
-            content = atob(base64);
+          if (doc.name.endsWith('.md') || doc.name.endsWith('.markdown')) {
+            content = atob(doc.base64);
             type = 'markdown';
-          } else if (name.endsWith('.txt')) {
-            content = atob(base64);
+          } else if (doc.name.endsWith('.txt')) {
+            content = atob(doc.base64);
             type = 'text';
+          } else if (doc.name.endsWith('.pdf')) {
+            content = atob(doc.base64);
+            type = 'pdf';
+          } else if (doc.name.endsWith('.doc') || doc.name.endsWith('.docx')) {
+            content = atob(doc.base64);
+            type = 'word';
           } else {
-            // fallback: treat as text, try to display, or offer download
-            content = atob(base64);
+            // fallback: offer download
+            content = atob(doc.base64);
             type = 'unknown';
           }
-          docs[doc.guid] = { name, content, type, base64 };
+          docs[doc.guid] = { guid: doc.guid, name: doc.name, content: content, type: type, base64: doc.base64 };
+          console.log('docs[doc.guid]: ', docs[doc.guid]);
         } catch (e) {
           docs[doc.guid] = { error: 'Failed to load or decode document.' };
+          showErrorDialog({ message: 'Failed to load or decode document.', note: e.message });
         }
       }
       setDocsContent(docs);
     }
-    fetchDocs();
+    if (issue) decodeDocs();
   }, [issue]);
   
   // Cast Vote //
@@ -551,7 +555,7 @@ function IssuePage() {
     {issue.supporting_docs?.length > 0 && (
       <FieldSet legend="Supporting Documents">
         <div style={{ textAlign: 'center' }}>
-          Click on the document title to toggle display of the document
+          Click on the document title to toggle display of the document<br />(Viewer for text or markdown files, download all others.)
         </div>
         <ul style={{ width: '100%', padding: 0, margin: 0, listStyle: 'none' }}>
           {issue.supporting_docs.map(doc => {
@@ -570,12 +574,19 @@ function IssuePage() {
                     width: '100%',
                   }}
                 >
+                {docData.type === 'markdown' || docData.type === 'text' && (
                   <strong
                     style={{ cursor: "pointer" }}
                     onClick={() => toggleDoc(doc.guid)}
                   >
                     {docData.name}
                   </strong>
+                )}
+                {docData.type !== 'markdown' && docData.type !== 'text' && (
+                  <strong>
+                    {docData.name}
+                  </strong>
+                )}
                   <Button
                     onClick={() => handleDownload(docData.name, docData.base64)}
                     style={{ marginLeft: 'auto', whiteSpace: 'nowrap' }}
