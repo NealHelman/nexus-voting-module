@@ -47,6 +47,7 @@ function AdminPageComponent() {
     creatorGenesis,
     jsonGuid,
     analysisGuid,
+    senderAddress,
     votingAuthoritySigchain,
     votingAuthorityAccount,
     donationRecipient,
@@ -93,13 +94,14 @@ function AdminPageComponent() {
   const setCreatorGenesis = (value) => dispatch({ type: 'SET_CREATOR_GENESIS', payload: value });
   const setJsonGuid = (value) => dispatch({ type: 'SET_JSON_GUID', payload: value });
   const setAnalysisGuid = (value) => dispatch({ type: 'SET_ANALYSIS_GUID', payload: value });
+  const setSenderAddress = (value) => dispatch({ type: 'SET_SENDER_ADDRESS', payload: value });
   const setVotingAuthoritySigchain = (value) => dispatch({ type: 'SET_VOTING_AUTHORITY_SIGCHAIN', payload: value });
   const setVotingAuthorityAccount = (value) => dispatch({ type: 'SET_VOTING_AUTHORITY_ACCOUNT', payload: value });
+  const setDonationRecipient = (page) => dispatch({ type: 'SET_DONATION_RECIPIENT', payload: page });
+  const setDonationAmount = (page) => dispatch({ type: 'SET_DONATION_AMOUNT', payload: page });
   const setNamedAssetCost = (value) => dispatch({ type: 'SET_NAMED_ASSET_COST', payload: value });
   const setNamedAccountCost = (value) => dispatch({ type: 'SET_NAMED_ACCOUNT_COST', payload: value });
   const setSubmissionCost = (value) => dispatch({ type: 'SET_SUBMISSION_COST', payload: value });
-  const setDonationRecipient = (page) => dispatch({ type: 'SET_DONATION_RECIPIENT', payload: page });
-  const setDonationAmount = (page) => dispatch({ type: 'SET_DONATION_AMOUNT', payload: page });
   
   const navigate = useNavigate();
   const fileInputRef = React.useRef();
@@ -545,8 +547,13 @@ function AdminPageComponent() {
       return;
     }
   };
+  
+  const resetDonationModal = async () => {
+    setIsDonating(false);
+    setDonationAmount(0);
+  };
 
-  if (!currentIssue) return <Panel title={panelTitle} icon={{ url: 'voting.svg', id: 'icon' }}><p>No voting issue found.</p></Panel>;
+  if (!currentIssue && editingIdFromParams) return <Panel title={panelTitle} icon={{ url: 'voting.svg', id: 'icon' }}><p>No voting issue found.</p></Panel>;
 
   return (
     <Panel title={panelTitle} icon={{ url: 'voting.svg', id: 'icon' }}>
@@ -801,6 +808,9 @@ function AdminPageComponent() {
         </div>
         <div style={{ justifySelf: 'end' }}>
           {copyright}
+          <Tooltip.Trigger tooltip="Mostly GitHub CoPilot, and smidgen of ChatGPT">
+            <span style={{ cursor: 'pointer', color: '#00b7fa', marginLeft: 6 }}>AI.</span>
+          </Tooltip.Trigger>
         </div>
       </div>
       {isDonating && (
@@ -819,7 +829,7 @@ function AdminPageComponent() {
               <Button onClick={handleDonation} disabled={!donationAmount} style={{ marginRight: '1rem' }}>
                 Donate
               </Button>
-              <Button onClick={() => setIsDonating(false)}>
+              <Button onClick={resetDonationModal}>
                 Cancel
               </Button>
             </div>

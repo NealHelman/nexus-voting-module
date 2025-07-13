@@ -123,7 +123,7 @@ function VotingPageComponent() {
     async (page = 1, search = '') => {
       setStatus(search == '' ? "loading" : "searching");
       if (backendAvailable !== true) return;
-      setLoading(true);
+      setLoading(true); 
 
       const backendListening = await pingBackend();
       if (!backendListening) {
@@ -206,8 +206,7 @@ function VotingPageComponent() {
   
   // ----------- EFFECT TO LOAD VOTES IF NEEDED -----------
   React.useEffect(() => {
-    console.log('entered handler to load votes');
-    if (!rehydrated) return; // Wait for redux-persist to rehydrate
+    if (!rehydrated) return; // Wait for redux-persist to rehydraten
     if (!rehydrated) return; // Wait for redux-persist to rehydrate
     if (
       backendAvailable === true &&
@@ -485,6 +484,16 @@ function VotingPageComponent() {
     }
   };
   
+  const resetDonationModal = async () => {
+    setIsDonating(false);
+    setDonationAmount(0);
+  };
+
+  const resetEmailModal = async () => {
+    setEmailVisible(false);
+    setUserEmail('');
+  };
+  
   return (
     <Panel title="Nexus Community On-Chain Voting - Issues Available" icon={{ url: 'voting.svg', id: 'icon' }}>
       <FieldSet style={{ position: 'relative', padding: '2em 1em 1em 1em' }}>
@@ -618,7 +627,7 @@ function VotingPageComponent() {
                       <Button onClick={handleSubscriptionToggle} disabled={!userEmailValid} style={{ marginRight: '1rem' }}>
                         Submit
                       </Button>
-                      <Button onClick={() => setEmailVisible(false)}>
+                      <Button onClick={resetEmailModal}>
                         Cancel
                       </Button>
                     </div>
@@ -784,6 +793,9 @@ function VotingPageComponent() {
         </div>
         <div style={{ justifySelf: 'end' }}>
           {copyright}
+          <Tooltip.Trigger tooltip="Mostly GitHub CoPilot, and smidgen of ChatGPT">
+            <span style={{ cursor: 'pointer', color: '#00b7fa', marginLeft: 6 }}>AI.</span>
+          </Tooltip.Trigger>
         </div>
       </div>
       {isDonating && (
@@ -802,7 +814,7 @@ function VotingPageComponent() {
               <Button onClick={handleDonation} disabled={!donationAmount} style={{ marginRight: '1rem' }}>
                 Donate
               </Button>
-              <Button onClick={() => setIsDonating(false)}>
+              <Button onClick={resetDonationModal}>
                 Cancel
               </Button>
             </div>

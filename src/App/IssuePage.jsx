@@ -258,10 +258,10 @@ function IssuePage() {
   }, [userGenesis, senderAddress]);
 
   React.useEffect(() => {
-    const debugValues = { userGenesis, userTrust, senderAddress, issue, optionVotedOn };
+    const debugValues = { userGenesis, userTrust, senderAddress, issue};
     console.log('Updating window.myModuleDebug:', debugValues);
     window.myModuleDebug = debugValues;
-  }, [userGenesis, userTrust, senderAddress, issue, optionVotedOn]);
+  }, [userGenesis, userTrust, senderAddress, issue]);
 
   // Fetch the voting issue metadata
   const fetchIssue = React.useCallback(
@@ -387,7 +387,6 @@ function IssuePage() {
   
   // Cast Vote //
   const handleVote = async (address) => {
-    console.log('handleVote::address: ', address);
     let txidString = '';
     try {
       const response = await secureApiCall('finance/debit/account', {
@@ -395,29 +394,49 @@ function IssuePage() {
         to: address,
         amount: voteCost,
         reference: userWeight
+      })
+      const result = response.data ?? response;
+
+      // If result is a string, parse and patch
+      let outputObj;
+      if (typeof result === "string") {
+        try {
+          outputObj = JSON.parse(result);
+        } catch (err) {
+          showErrorDialog({
+            message: "Unexpected response format",
+            note: result,
+          });
+          return;
         }
-      );
+      } else {
+        outputObj = result;
+      }
+
+       // Normalize success to 1 if it's boolean true
+      if (outputObj && outputObj.success === true) {
+        outputObj.success = 1;
+      }
       
-      setOptionVotedOn(address);
-
-      const result = response.data ?? response; // fallback if not Axios
-      if (response.success) showSuccessDialog({ 
-        message: 'Success!',
-        note: 'You voted!'
-      });
-
-      if (!result.success) {
+      if (!outputObj.success) {
         showErrorDialog({
-          message: 'NXS voting debit failed',
-          note: 'No txid returned.'
+          message: 'Failed',
+          note: `Your attempt to vote failed - err: ${err.message}`
         });
         return;
       }
-      txidString = result.txid.toString();
+      
+     showSuccessDialog({ 
+        message: 'Success!',
+        note: 'You voted!'
+      });
+      setOptionVotedOn(address);
+      txidString = result.txid?.toString?.() ?? '';
       console.log('voting txidString: ', txidString);
+
     } catch (e) {
       showErrorDialog({
-        message: 'Error during sending voting issue creation fee',
+        message: 'Error during donation',
         note: e.message
       });
       return;
@@ -486,6 +505,11 @@ function IssuePage() {
     }
   };
   
+  const resetDonationModal = async () => {
+    setIsDonating(false);
+    setDonationAmount(0);
+  };
+
   if (error) return <Panel title={panelTitle} icon={{ url: 'voting.svg', id: 'icon' }}><p style={{ color: 'red' }}>{error}</p></Panel>;
   if (!currentIssue) return <Panel title={panelTitle} icon={{ url: 'voting.svg', id: 'icon' }}><p>No voting issue found.</p></Panel>;
 
@@ -764,6 +788,9 @@ function IssuePage() {
         </div>
         <div style={{ justifySelf: 'end' }}>
           {copyright}
+          <Tooltip.Trigger tooltip="Mostly GitHub CoPilot, and smidgen of ChatGPT">
+            <span style={{ cursor: 'pointer', color: '#00b7fa', marginLeft: 6 }}>AI.</span>
+          </Tooltip.Trigger>
         </div>
       </div>
       {isDonating && (
@@ -782,7 +809,7 @@ function IssuePage() {
               <Button onClick={handleDonation} disabled={!donationAmount} style={{ marginRight: '1rem' }}>
                 Donate
               </Button>
-              <Button onClick={() => setIsDonating(false)}>
+              <Button onClick={resetDonationModal}>
                 Cancel
               </Button>
             </div>
