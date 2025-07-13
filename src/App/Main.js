@@ -5,11 +5,11 @@ import AdminPage from './AdminPage';
 import IssuePage from './IssuePage';
 import UserGuidePage from './UserGuidePage';
 import { useSelector, useDispatch } from 'react-redux';
+import '../walletSessionManager.js';
 
 export default function Main() {
   const rehydrated = useSelector(state => state._persist?.rehydrated);
-  const wholeState = useSelector(state => state);
-  console.log("rehydrated", rehydrated, wholeState);
+  console.log("rehydrated", rehydrated);
   if (!rehydrated) return null;
   
   return (
