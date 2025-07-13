@@ -22,6 +22,7 @@ const initialState = {
   creatorGenesis: '',
   jsonGuid: '',
   analysisGuid: '',
+  senderAddress: '',
   votingAuthoritySigchain: '',
   votingAuthorityAccount: '',
   donationRecipient: '',
@@ -101,6 +102,8 @@ export default function admin(state = initialState, action) {
       return { ...state, jsonGuid: action.payload };
     case 'SET_ANALYSIS_GUID':
       return { ...state, analysisGuid: action.payload };
+    case 'SET_SENDER_ADDRESS':
+      return { ...state, senderAddress: action.payload };
     case 'SET_VOTING_AUTHORITY_SIGCHAIN':
       return { ...state, votingAuthoritySigchain: action.payload };
     case 'SET_VOTING_AUTHORITY_ACCOUNT':
