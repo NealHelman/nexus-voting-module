@@ -5,7 +5,7 @@ import nxsPackage from '../../nxs_package.json' with { type: "json" };
 
 const { version } = nxsPackage;
 const React = NEXUS.libraries.React;
-const userGuideUrl = 'https://raw.githubusercontent.com/NealHelman/nexus-voting-module/main/path/to/UserGuide.md';
+const userGuideUrl = 'https://raw.githubusercontent.com/NealHelman/nexus-voting-module/main/user_guide/UserGuide.md';
 
 function UserGuidePage() {
   const {
