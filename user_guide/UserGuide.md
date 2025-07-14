@@ -53,7 +53,7 @@ Once installed, open the **Voting** tab in the Nexus wallet. There, you can:
 
 ### ✅ Cast Your Vote
 
-![Voting Issue Details Page - Cast Your Vote](./screenshots/Issue-Details-Bottom.jpg)
+![Voting Issue Details Page - Cast Your Vote](https://raw.githubusercontent.com/NealHelman/nexus-voting-module/main/user_guide/screenshots/Issue-Details-Bottom.jpg)
 
 1.  Click the voting option button to place your vote
 2.  You'll be prompted to enter your PIN
