@@ -72,7 +72,7 @@ Once installed, open the **Voting** tab in the Nexus wallet. There, you can:
 
 ## 🧾 Submitting Voting Issues *(Admin Only)*
 
-![Entering/Editing Voting Issues - #1]https://raw.githubusercontent.com/NealHelman/nexus-voting-module/main/user_guide//screenshots/Enter-New-Voting-Issue-Top.jpg)![Entering/Editing Voting Issues - #2](https://raw.githubusercontent.com/NealHelman/nexus-voting-module/main/user_guide//screenshots/Enter-New-Voting-Issue-Middle.jpg)![Entering/Editing Voting Issues - #3](https://raw.githubusercontent.com/NealHelman/nexus-voting-module/main/user_guide//screenshots/Enter-New-Voting-Issue-Bottom.jpg)
+![Entering/Editing Voting Issues - #1]https://raw.githubusercontent.com/NealHelman/nexus-voting-module/main/user_guide/screenshots/Enter-New-Voting-Issue-Top.jpg)![Entering/Editing Voting Issues - #2](https://raw.githubusercontent.com/NealHelman/nexus-voting-module/main/user_guide//screenshots/Enter-New-Voting-Issue-Middle.jpg)![Entering/Editing Voting Issues - #3](https://raw.githubusercontent.com/NealHelman/nexus-voting-module/main/user_guide//screenshots/Enter-New-Voting-Issue-Bottom.jpg)
 
 ![Entering/Editing Voting Issues - #4](./screenshots/Edit-Voting-Issue-Top.jpg)![Entering/Editing Voting Issues - #5](./screenshots/Edit-Voting-Issue-Supporting-Docs.jpg)![Entering/Editing Voting Issues - #6](./screenshots/Edit-Voting-Issue-Options.jpg)
 
