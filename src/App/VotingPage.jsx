@@ -17,8 +17,8 @@ function VotingPageComponent() {
   const rehydrated = useSelector(state => state._persist?.rehydrated);
   
   const {
-    components: { Button, Modal, Panel, Dropdown, FieldSet, TextField, Tooltip },
-    utilities: { apiCall, confirm, proxyRequest, updateState, secureApiCall, showErrorDialog, showSuccessDialog, uiSessionId },
+    components: { Button, Modal, Panel, Dropdown, FieldSet, TextField, Tooltip }, 
+    utilities: { apiCall, confirm, proxyRequest, updateState, secureApiCall, showErrorDialog, showInfoDialog, showSuccessDialog },
   } = NEXUS;
   
   // Voting state from Redux
@@ -45,8 +45,8 @@ function VotingPageComponent() {
     senderAddress,
     votingAuthoritySigchain,
     votingAuthorityAccount,
-    donationRecipient,
-    donationAmount
+    votingAuthorityGenesis,
+    donationRecipient
   } = useSelector(state => state.voting);
 
   const dispatch = useDispatch();
@@ -57,12 +57,14 @@ function VotingPageComponent() {
 
   // All state
   const [isDonating, setIsDonating] = React.useState(false);
+  const [donationAmount, setDonationAmount] = React.useState(0);
   const [userEmailValid, setUserEmailValid] = React.useState(false);
   const [emailVisible, setEmailVisible] = React.useState(false);
   const [backendAvailable, setBackendAvailable] = React.useState(null);
-  const [titleSearchVisible, setTitleSearchVisible] = React.useState(false);
+  const [searchVisible, setSearchVisible] = React.useState(false);
   const [status, setStatus] = React.useState("idle");
   const [loading, setLoading] = React.useState(true);
+  const [searchKey, setSearchKey] = React.useState('');
 
   // View state (cache meta)
   const setCurrentPage = (page) => {
@@ -108,8 +110,8 @@ function VotingPageComponent() {
   const setSenderAddress = (page) => dispatch({ type: 'SET_SENDER_ADDRESS', payload: page });
   const setVotingAuthoritySigchain = (page) => dispatch({ type: 'SET_VOTING_AUTHORITY_SIGCHAIN', payload: page });
   const setVotingAuthorityAccount = (page) => dispatch({ type: 'SET_VOTING_AUTHORITY_ACCOUNT', payload: page });
+  const setVotingAuthorityGenesis = (page) => dispatch({ type: 'SET_VOTING_AUTHORITY_GENESIS', payload: page });
   const setDonationRecipient = (page) => dispatch({ type: 'SET_DONATION_RECIPIENT', payload: page });
-  const setDonationAmount = (page) => dispatch({ type: 'SET_DONATION_AMOUNT', payload: page });
   
   function calculateDefaultDeadline() {
     const now = new Date();
@@ -120,9 +122,9 @@ function VotingPageComponent() {
 
   // ----------- LOAD VOTES LOGIC -----------
   const loadVotes = React.useCallback(
-    async (page = 1, search = '') => {
-      setStatus(search == '' ? "loading" : "searching");
-      if (backendAvailable !== true) return;
+    async (page = 1, keyInput = '', searchInput = '') => {
+      (setStatus == '' ? "loading" : "searching");
+      if (backendAvailable !== true || !votingAuthorityGenesis) return;
       setLoading(true); 
 
       const backendListening = await pingBackend();
@@ -138,16 +140,24 @@ function VotingPageComponent() {
       try {
         const offset = (page - 1) * votesPerPage;
         let showMine = '';
+        let searchKeyQ = '';
+        let searchTermQ = '';
+        let cleanSearchInput = '';
         if (sortField === 'mine') {
           showMine = `&creatorGenesis=${genesis}`;
         }
-        let searchTitle = '';
-        if (search !== '') {
-          searchTitle = `&searchTitle=${search}`;
+        if (searchInput !== '' && keyInput !== '') {
+          searchKeyQ = `&searchKey=${keyInput}`;
+          cleanSearchInput = searchInput.replace(/#/g, "");
+          searchTermQ = `&searchTerm=${cleanSearchInput}`;
         }
         
+        console.log('loadVotes::showMine: ', showMine);
+        console.log('loadVotes::searchKeyQ: ', searchKeyQ);
+        console.log('loadVotes::searchTermQ: ', searchTermQ);
+        
         const response = await proxyRequest(
-          `${BACKEND_BASE}/ledger/list/objects/paginated?limit=${votesPerPage}&offset=${offset}&sort=${sortField}&direction=${sortDirection}${showMine}${searchTitle}`,
+          `${BACKEND_BASE}/ledger/list/objects/paginated?limit=${votesPerPage}&offset=${offset}&sort=${sortField}&direction=${sortDirection}${showMine}${searchKeyQ}${searchTermQ}&votingAuthorityGenesis=${votingAuthorityGenesis}`,
           { method: 'GET' }
         );
 
@@ -159,7 +169,7 @@ function VotingPageComponent() {
         const voteCounts = {};
         for (const vote of rawVotes) {
           try {
-            const response = await proxyRequest(`${BACKEND_BASE}/weighted-results/${vote.slug}`, { method: 'GET' });
+            const response = await proxyRequest(`${BACKEND_BASE}/weighted-results/${vote.slug}?votingAuthorityGenesis=${votingAuthorityGenesis}`, { method: 'GET' });
             counts[vote.slug] = response.data.countResult;
             voteCounts[vote.slug] = response.data.totalUniqueVotes || 0;
           } catch (err) {
@@ -179,8 +189,9 @@ function VotingPageComponent() {
           votesPerPage,
           sortField,
           sortDirection,
-          filter,
-          searchTerm: search
+          searchKey,
+          searchTerm,
+          filter
         });
         setVoteListFetched(true);
         
@@ -197,6 +208,7 @@ function VotingPageComponent() {
       setStatus("idle");
       setLoading(false);
       setSearchTerm('');
+      setSearchKey('title');
     },
     [
       backendAvailable, votesPerPage, sortField, sortDirection,
@@ -214,10 +226,10 @@ function VotingPageComponent() {
       !!genesis
     ) {
       console.log('about to call load votes');
-      loadVotes(currentPage, searchTerm);
+      loadVotes(currentPage, searchKey, searchTerm);
     }
   }, [
-    rehydrated, backendAvailable, voteListFetched, genesis, currentPage, searchTerm
+    rehydrated, backendAvailable, voteListFetched, genesis, currentPage
   ]);
   
   // ----------- CHECK TO SEE IF BACKEND IS RESPONDING -----------
@@ -300,15 +312,16 @@ function VotingPageComponent() {
 
   // ----------- LOAD PROTECTED VALUES -----------
   React.useEffect(() => {
-    if (!votingAuthoritySigchain) {
+    if (!votingAuthoritySigchain || !votingAuthorityGenesis) {
       if (backendAvailable !== true) return;
       nexusVotingService.getProtectedValues().then(({ data }) => {
         setVotingAuthoritySigchain(data.VOTING_AUTHORITY_SIGCHAIN);
         setVotingAuthorityAccount(data.VOTING_AUTHORITY_ACCOUNT);
+        setVotingAuthorityGenesis(data.VOTING_AUTHORITY_GENESIS);
         setDonationRecipient(data.DONATION_RECIPIENT);
       });
     }
-  }, [backendAvailable]);
+  }, [backendAvailable, votingAuthoritySigchain, votingAuthorityGenesis]);
 
   // ----------- GET WALLET USER'S GENESIS -----------
   React.useEffect(() => {
@@ -331,7 +344,7 @@ function VotingPageComponent() {
   }, [backendAvailable]);
     
     // ----------- GET WALLET USER'S DEFAULT ACCOUNT ADDRESS -----------
-    React.useEffect(() => {
+  React.useEffect(() => {
     if (!genesis || backendAvailable !== true) return;
 
     const fetchSenderAddress = async () => {
@@ -348,7 +361,7 @@ function VotingPageComponent() {
       }
     };
     fetchSenderAddress();
-  }, [backendAvailable, genesis]);
+  }, [backendAvailable, genesis, senderAddress]);
 
   // ----------- GET WALLET USER'S SUBSCRIPTION STATUS AND TRUST SCORE -----------
   React.useEffect(() => {
@@ -391,7 +404,7 @@ function VotingPageComponent() {
       if (!genesis || senderAddress == '' || backendAvailable !== true) return;
       if (!userVotesCast) {
         const response = await proxyRequest(
-          `${BACKEND_BASE}/votes-cast/${genesis}?senderAddress=${encodeURIComponent(senderAddress)}`,
+          `${BACKEND_BASE}/votes-cast/${genesis}?senderAddress=${encodeURIComponent(senderAddress)}&votingAuthorityGenesis=${votingAuthorityGenesis}`,
           { method: 'GET' }
         );
         console.log('fetchVotesCast::response', response);
@@ -403,18 +416,39 @@ function VotingPageComponent() {
 
   // ----------- EXPOSE SETTINGS FOR DEBUGGING -----------
   React.useEffect(() => {
-    const debugValues = { genesis, filter, sortDirection, userTrust, minTrust, subscribed, senderAddress, weightedVoteCounts, voteList };
+    const debugValues = { 
+      genesis, 
+      filter, 
+      sortDirection, 
+      userTrust, 
+      minTrust, 
+      subscribed, 
+      senderAddress, 
+      weightedVoteCounts, 
+      voteList, 
+      votingAuthorityGenesis, 
+      donationRecipient };
     console.log('Updating window.myModuleDebug:', debugValues);
     window.myModuleDebug = debugValues;
-  }, [genesis, filter, sortDirection, userTrust, minTrust, subscribed, senderAddress, weightedVoteCounts, voteList]);
+  }, [genesis, 
+      filter, 
+      sortDirection, 
+      userTrust, 
+      minTrust, 
+      subscribed, 
+      senderAddress, 
+      weightedVoteCounts, 
+      voteList, 
+      votingAuthorityGenesis,
+      donationRecipient]);
 
   // ----------- HELPER FUNCTION TO INITIATE SEARCH -----------
   const handleStartSearch = (e) => {
     dispatch({ type: 'SET_VOTE_LIST_FETCHED', payload: false });
     setStatus("searching")
-    setTitleSearchVisible(false);
+    setSearchVisible(false);
     setCurrentPage(1);
-    loadVotes(1, searchTerm);
+    loadVotes(1, searchKey, searchTerm);
   };
 
   // ----------- HELPER FUNCTION DEALING WITH PAGE SIZE -----------
@@ -431,67 +465,66 @@ function VotingPageComponent() {
   
   // ----------- HELPER FUNCTION TO RELOAD THIS PAGE FROM SCRATCH -----------
   const handleRefresh = () => {
+    setVotingAuthoritySigchain('');
     setCurrentPage(1);
   };
   
-  // ----------- SEND DONATION TO MODULE AUTHOR -----------
+  const resetEmailModal = async () => {
+    setEmailVisible(false);
+    setUserEmail('');
+  };
+  
   const handleDonation = async () => {
-    if (!donationRecipient || !donationAmount) return;
+    if (!donationRecipient || !donationAmount) return false;
     try {
       const response = await secureApiCall('finance/debit/account', {
-        from: senderAddress.address,
+        from: senderAddress,
         to: donationRecipient,
         amount: donationAmount
-        }
-      );
+      });
 
       const result = response.data ?? response;
+      console.log('donationUtils::result: ', result);
 
-      // If result is a string, parse and patch
       let outputObj;
       if (typeof result === "string") {
         try {
           outputObj = JSON.parse(result);
         } catch (err) {
-          showErrorDialog({
+          showErrorDialog?.({
             message: "Unexpected response format",
             note: result,
           });
-          return;
+          return false;
         }
       } else {
         outputObj = result;
       }
 
-      // Normalize success to 1 if it's boolean true
       if (outputObj && outputObj.success === true) {
         outputObj.success = 1;
       }
 
       if (!outputObj.success) {
-        showErrorDialog({
+        showErrorDialog?.({
           message: "Donation failed",
           note: "Maybe try again later?"
         });
-        return;
+        return false;
       }
+      showSuccessDialog?.({ message: "Donation Success!" });
+      return true;
     } catch (e) {
-      showErrorDialog({
+      showErrorDialog?.({
         message: 'Error during donation',
         note: e.message
       });
-      return;
+      return false;
     }
-  };
-  
-  const resetDonationModal = async () => {
-    setIsDonating(false);
+  }
+  const resetDonationModal = () => {
     setDonationAmount(0);
-  };
-
-  const resetEmailModal = async () => {
-    setEmailVisible(false);
-    setUserEmail('');
+    setIsDonating(false);
   };
   
   return (
@@ -506,7 +539,7 @@ function VotingPageComponent() {
           cursor: 'pointer'
         }}>
           <Tooltip.Trigger tooltip="Search for a Title">
-            <Link onClick={() => setTitleSearchVisible(true)} style={{ marginRight: '1rem' }}>
+            <Link onClick={() => setSearchVisible(true)} style={{ marginRight: '1rem' }}>
               <img src='binoculars.svg' height='32px' /> 
             </Link>
           </Tooltip.Trigger>
@@ -521,23 +554,32 @@ function VotingPageComponent() {
             </Link>
           </Tooltip.Trigger>
         </div>
-        {titleSearchVisible && (
+        {searchVisible && (
           <Modal 
-            id="titleSearchEntryDialog" 
+            id="searchEntryDialog" 
             escToClose={true}
-            removeModal={ () => setEmailVisible(false)}
+            removeModal={ () => setSearchVisible(false)}
             style={{ width: '500px' }}
           >
-            <Modal.Header>Enter a word to search (titles only and case-sensitive)</Modal.Header>
+            <Modal.Header>Choose a key to search on,<br />and enter a word to search<br />(case-sensitive)</Modal.Header>
             <Modal.Body>
+              <label htmlFor="searchKeySelect" style={{ marginBottom: 'auto', marginTop: 'auto', textAlign: 'center' }}>
+                Search&nbsp;Key
+                <Dropdown label="Filter">
+                  <select value={searchKey} onChange={e => setSearchKey(e.target.value)}>
+                    <option value="title">Title</option>
+                    <option value="hashtag">Hashtag</option>
+                  </select>
+                </Dropdown>
+              </label>
               <TextField label="SearchTerm" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
             </Modal.Body>
             <Modal.Footer>
-              <div class="Modal__Footer">
-                <Button onClick={handleStartSearch} disabled={!searchTerm} style={{ marginRight: '1rem' }}>
+              <div className="Modal__Footer">
+                <Button onClick={handleStartSearch} disabled={!searchTerm || !searchKey} style={{ marginRight: '1rem' }}>
                   Search
                 </Button>
-                <Button onClick={() => setTitleSearchVisible(false)}>
+                <Button onClick={() => setSearchVisible(false)}>
                   Cancel
                 </Button>
               </div>
@@ -698,6 +740,7 @@ function VotingPageComponent() {
                         <div style={{ flex: 1 }}>
                           <div style={{ fontWeight: 'bold', marginBottom: '0.25rem', color: '#00b7fa' }}>{vote.title}</div>
                           <div style={{ fontSize: '0.9rem', lineHeight: '1.4' }}>
+                            <div>Hashtag: {vote.hashtag}</div>
                             <div>Created On: {new Date(vote.created_at * 1000).toLocaleDateString()}</div>
                             <div>Deadline: {new Date(vote.deadline * 1000).toLocaleDateString()}</div>
                             <div>Number of Votes Cast: {vote.voteCount?.toLocaleString() ?? '0'}</div>
@@ -805,8 +848,10 @@ function VotingPageComponent() {
             <TextField label="DonationAmount" value={donationAmount} onChange={(e) => setDonationAmount(e.target.value)} style={{ color: 'white' }}/>
           </Modal.Body>
           <Modal.Footer>
-            <div class="Modal__Footer">
-              <Button onClick={handleDonation} disabled={!donationAmount} style={{ marginRight: '1rem' }}>
+            <div className="Modal__Footer">
+              <Button 
+                onClick={() => handleDonation()}
+                disabled={!donationAmount || !senderAddress} style={{ marginRight: '1rem' }}>
                 Donate
               </Button>
               <Button onClick={resetDonationModal}>

@@ -25,6 +25,7 @@ function IssuePage() {
   const rehydrated = useSelector(state => state._persist?.rehydrated);
   const { currentIssue } = useSelector(state => state.issue);
   const issue = currentIssue?.data;
+  console.log('[IssuePage::issue: ', issue);
   const { issueId } = useParams();
 
   const {
@@ -45,6 +46,7 @@ function IssuePage() {
   organizerName,
   organizerEmail,
   organizerTelegram,
+  hashtag,
   deadline,
   summaryPro,
   summaryCon,
@@ -68,19 +70,19 @@ function IssuePage() {
   votingAuthoritySigchain,
   votingAuthorityAccount,
   votingAuthorityGenesis,
-  donationRecipient,
-  donationAmount
-  } = useSelector(state => state.issue);
+  donationRecipient
+} = useSelector(state => state.issue);
 
   const dispatch = useDispatch();
 
   // Flags and Miscellaneous
+  const [isDonating, setIsDonating] = React.useState(false);
+  const [donationAmount, setDonationAmount] = React.useState(0);
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState('');
   const [docsContent, setDocsContent] = React.useState([]);
   const [voteCost, setVoteCost] = React.useState(0.000001);
   const [openDocs, setOpenDocs] = React.useState([]);
-  const [isDonating, setIsDonating] = React.useState(false);
 
   // User & issue state
   const issueCacheEntry = useSelector(state => state.issue.issuesCache?.[issueId] || null);
@@ -94,6 +96,7 @@ function IssuePage() {
   const setOrganizerName = (value) => dispatch({ type: 'SET_ORGANIZER_NAME', payload: value });
   const setOrganizerEmail = (value) => dispatch({ type: 'SET_ORGANIZER_EMAIL', payload: value });
   const setOrganizerTelegram = (value) => dispatch({ type: 'SET_ORGANIZER_TELEGRAM', payload: value });
+  const setHashtag = (value) => dispatch({ type: 'SET_HASHTAG', payload: value });
   const setDeadline = (value) => dispatch({ type: 'SET_DEADLINE', payload: value });
   const setSummaryPro = (value) => dispatch({ type: 'SET_SUMMARY_PRO', payload: value });
   const setSummaryCon = (value) => dispatch({ type: 'SET_SUMMARY_CON', payload: value });
@@ -118,7 +121,6 @@ function IssuePage() {
   const setVotingAuthorityAccount = (value) => dispatch({ type: 'SET_VOTING_AUTHORITY_ACCOUNT', payload: value });
   const setVotingAuthorityGenesis = (value) => dispatch({ type: 'SET_VOTING_AUTHORITY_GENESIS', payload: value });
   const setDonationRecipient = (page) => dispatch({ type: 'SET_DONATION_RECIPIENT', payload: page });
-  const setDonationAmount = (page) => dispatch({ type: 'SET_DONATION_AMOUNT', payload: page });
 
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -247,7 +249,7 @@ function IssuePage() {
     const fetchVotesCastOverall = async () => {
       if (!userGenesis || !senderAddress) return; // wait until both are available
       const response = await proxyRequest(
-        `${BACKEND_BASE}/votes-cast/${userGenesis}?senderAddress=${encodeURIComponent(senderAddress)}`,
+        `${BACKEND_BASE}/votes-cast/${userGenesis}?senderAddress=${encodeURIComponent(senderAddress)}&votingAuthorityGenesis=${votingAuthorityGenesis}`,
         { method: 'GET' }
       );
       setUserVotesCastOverall(response.data.votesCast || 0);
@@ -350,24 +352,27 @@ function IssuePage() {
     async function decodeDocs() {
       if (!issue?.supporting_docs?.length) return;
 
-      //'md', 'txt', 'pdf', 'doc', 'docx'
+      //'md', 'markdown', 'txt', 'pdf', 'doc', 'docx', 'ppt', 'pptx'
       const docs = [];
       for (const doc of issue.supporting_docs) {
         try {
           let content, type = '';
           // Try to determine type from name or magic
-          if (doc.name.endsWith('.md') || doc.name.endsWith('.markdown')) {
+          if (doc.type == 'text/markdown') {
             content = atob(doc.base64);
             type = 'markdown';
-          } else if (doc.name.endsWith('.txt')) {
+          } else if (doc.type == 'text/plain') {
             content = atob(doc.base64);
             type = 'text';
-          } else if (doc.name.endsWith('.pdf')) {
+          } else if (doc.type == 'application/pdf') {
             content = atob(doc.base64);
             type = 'pdf';
-          } else if (doc.name.endsWith('.doc') || doc.name.endsWith('.docx')) {
+          } else if (doc.type == 'application/msword' || doc.type == 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
             content = atob(doc.base64);
             type = 'word';
+          } else if (doc.type == 'application/vnd.ms-powerpoint' || doc.type == 'application/vnd.openxmlformats-officedocument.presentationml.presentation') {
+            content = atob(doc.base64);
+            type = 'powerpoint';
           } else {
             // fallback: offer download
             content = atob(doc.base64);
@@ -564,6 +569,9 @@ function IssuePage() {
         <strong>Organizer's Telegram:</strong> {issue.organizer_telegram || ''}
       </div>
       <div>
+        <strong>Hashtag:</strong> {issue.hashtag || ''}
+      </div>
+      <div>
         <strong>Minimum Trust Required to Vote:</strong> {Number(issue.min_trust).toLocaleString()}
       </div>
       <div style={{ marginTop: '3rem' }}>
@@ -597,15 +605,16 @@ function IssuePage() {
                     width: '100%',
                   }}
                 >
-                {docData.type === 'markdown' || docData.type === 'text' && (
+                {console.log('IssuePage::docData: ', docData)}
+                {(docData.type == 'markdown' || docData.type === 'text') && (
                   <strong
-                    style={{ cursor: "pointer" }}
+                    style={{ cursor: 'pointer', color: '#00b7fa' }}
                     onClick={() => toggleDoc(doc.guid)}
                   >
                     {docData.name}
                   </strong>
                 )}
-                {docData.type !== 'markdown' && docData.type !== 'text' && (
+                {(docData.type !== 'markdown' && docData.type !== 'text') && (
                   <strong>
                     {docData.name}
                   </strong>
@@ -622,7 +631,7 @@ function IssuePage() {
                     {docData.type === 'markdown' && (
                       <div className="document-display" style={{ fontFamily: 'Times New Roman, Times, serif' }}>
                         <MarkdownWithZoom>
-                          {docContent}
+                          {docData.content}
                         </MarkdownWithZoom>
                       </div>
                     )}

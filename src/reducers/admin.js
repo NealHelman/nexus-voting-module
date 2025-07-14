@@ -12,6 +12,7 @@ const initialState = {
   organizerName: '',
   organizerEmail: '',
   organizerTelegram: '',
+  hashtag: '',
   deadline: '',
   summaryPro: '',
   summaryCon: '',
@@ -25,8 +26,8 @@ const initialState = {
   senderAddress: '',
   votingAuthoritySigchain: '',
   votingAuthorityAccount: '',
+  votingAuthorityGenesis: '',
   donationRecipient: '',
-  donationAmount: 0,
   namedAssetCost: 0,
   namedAccountCost: 0,
   submissionCost: 0
@@ -82,6 +83,8 @@ export default function admin(state = initialState, action) {
       return { ...state, organizerEmail: action.payload };
     case 'SET_ORGANIZER_TELEGRAM':
       return { ...state, organizerTelegram: action.payload };
+    case 'SET_HASHTAG':
+      return { ...state, hashtag: action.payload };
     case 'SET_DEADLINE':
       return { ...state, deadline: action.payload };
     case 'SET_SUMMARY_PRO':
@@ -108,10 +111,10 @@ export default function admin(state = initialState, action) {
       return { ...state, votingAuthoritySigchain: action.payload };
     case 'SET_VOTING_AUTHORITY_ACCOUNT':
       return { ...state, votingAuthorityAccount: action.payload };
+    case 'SET_VOTING_AUTHORITY_GENESIS':
+      return { ...state, votingAuthorityGenesis: action.payload };
     case 'SET_DONATION_RECIPIENT':
       return { ...state, donationRecipient: action.payload };
-    case 'SET_DONATION_AMOUNT':
-      return { ...state, donationAmount: action.payload };
     case 'SET_NAMED_ASSET_COST':
       return { ...state, namedAssetCost: action.payload };
     case 'SET_NAMED_ACCOUNT_COST':

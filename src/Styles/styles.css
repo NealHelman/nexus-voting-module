@@ -142,7 +142,7 @@ button:hover {
 }
 
 /* Code blocks */
-.document-display ReactMarkdown,
+.document-display MarkdownWithZoom,
 .document-display pre {
   margin: 0.4em 0;
   padding: 1em;

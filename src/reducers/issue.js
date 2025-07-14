@@ -14,6 +14,7 @@ const initialState = {
   organizerName: '',
   organizerEmail: '',
   organizerTelegram: '',
+  hashtag: '',
   deadline: '',
   summaryPro: '',
   summaryCon: '',
@@ -38,7 +39,6 @@ const initialState = {
   votingAuthorityAccount: '',
   votingAuthorityGenesis: '',
   donationRecipient:'',
-  donationAmount: 0
 };
 
 export default function issue(state = initialState, action) {
@@ -95,6 +95,8 @@ export default function issue(state = initialState, action) {
       return { ...state, organizerEmail: action.payload };
     case 'SET_ORGANIZER_TELEGRAM':
       return { ...state, organizerTelegram: action.payload };
+    case 'SET_HASHTAG':
+      return { ...state, hashtag: action.payload };
     case 'SET_DEADLINE':
       return { ...state, deadline: action.payload };
     case 'SET_SUMMARY_PRO':
@@ -137,12 +139,12 @@ export default function issue(state = initialState, action) {
       return { ...state, optionVotedOn: action.payload };
     case 'SET_VOTING_AUTHORITY_SIGCHAIN':
       return { ...state, votingAuthoritySigchain: action.payload };
+    case 'SET_VOTING_AUTHORITY_ACCOUNT':
+      return { ...state, votingAuthorityAccount: action.payload };
     case 'SET_VOTING_AUTHORITY_GENESIS':
       return { ...state, votingAuthorityGenesis: action.payload };
     case 'SET_DONATION_RECIPIENT':
       return { ...state, donationRecipient: action.payload };
-    case 'SET_DONATION_AMOUNT':
-      return { ...state, donationAmount: action.payload };
     default:
       return state;
   }

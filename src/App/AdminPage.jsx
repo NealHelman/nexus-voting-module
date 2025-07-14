@@ -6,6 +6,7 @@ import axios from 'axios';
 import { Link, useNavigate, useLocation, useSearchParams, useParams } from 'react-router-dom';
 import { sha256FromFile } from '../utils/ipfs';
 import { Copyright } from '../utils/copyright.js';
+import { fixHashtag } from '../utils/fixHashtag.js';
 import nxsPackage from '../../nxs_package.json' with { type: "json" };
 
 const { version } = nxsPackage;
@@ -37,6 +38,7 @@ function AdminPageComponent() {
     organizerName,
     organizerEmail,
     organizerTelegram,
+    hashtag,
     deadline,
     summaryPro,
     summaryCon,
@@ -50,8 +52,8 @@ function AdminPageComponent() {
     senderAddress,
     votingAuthoritySigchain,
     votingAuthorityAccount,
+    votingAuthorityGenesis,
     donationRecipient,
-    donationAmount,
     namedAssetCost,
     namedAccountCost,
     submissionCost
@@ -71,6 +73,7 @@ function AdminPageComponent() {
   const [isUploading, setIsUploading] = React.useState(false);
   const [submitButtonTitle, setSubmitButtonTitle] = React.useState('Submit');
   const [isDonating, setIsDonating] = React.useState(false);
+  const [donationAmount, setDonationAmount] = React.useState(0);
   const [userEmailValid, setUserEmailValid] = React.useState(false);
 
   // User & admin state
@@ -84,6 +87,7 @@ function AdminPageComponent() {
   const setOrganizerName = (value) => dispatch({ type: 'SET_ORGANIZER_NAME', payload: value });
   const setOrganizerEmail = (value) => dispatch({ type: 'SET_ORGANIZER_EMAIL', payload: value });
   const setOrganizerTelegram = (value) => dispatch({ type: 'SET_ORGANIZER_TELEGRAM', payload: value });
+  const setHashtag = (value) => dispatch({ type: 'SET_HASHTAG', payload: value });
   const setDeadline = (value) => dispatch({ type: 'SET_DEADLINE', payload: value });
   const setSummaryPro = (value) => dispatch({ type: 'SET_SUMMARY_PRO', payload: value });
   const setSummaryCon = (value) => dispatch({ type: 'SET_SUMMARY_CON', payload: value });
@@ -97,8 +101,8 @@ function AdminPageComponent() {
   const setSenderAddress = (value) => dispatch({ type: 'SET_SENDER_ADDRESS', payload: value });
   const setVotingAuthoritySigchain = (value) => dispatch({ type: 'SET_VOTING_AUTHORITY_SIGCHAIN', payload: value });
   const setVotingAuthorityAccount = (value) => dispatch({ type: 'SET_VOTING_AUTHORITY_ACCOUNT', payload: value });
+  const setVotingAuthorityGenesis = (value) => dispatch({ type: 'SET_VOTING_AUTHORITY_GENESIS', payload: value });
   const setDonationRecipient = (page) => dispatch({ type: 'SET_DONATION_RECIPIENT', payload: page });
-  const setDonationAmount = (page) => dispatch({ type: 'SET_DONATION_AMOUNT', payload: page });
   const setNamedAssetCost = (value) => dispatch({ type: 'SET_NAMED_ASSET_COST', payload: value });
   const setNamedAccountCost = (value) => dispatch({ type: 'SET_NAMED_ACCOUNT_COST', payload: value });
   const setSubmissionCost = (value) => dispatch({ type: 'SET_SUBMISSION_COST', payload: value });
@@ -252,6 +256,7 @@ function AdminPageComponent() {
       setOrganizerName(assetData.organizer_name || '');
       setOrganizerEmail(assetData.organizer_email || '');
       setOrganizerTelegram(assetData.organizer_telegram || '');
+      setHashtag(assetData.hashtag || '');
       setDeadline(assetData.deadline || '');
       setSummaryPro(assetData.summary_pro || '');
       setSummaryCon(assetData.summary_con || '');
@@ -263,6 +268,7 @@ function AdminPageComponent() {
       setJsonGuid(assetData.issueInfo || '');
       setVotingAuthoritySigchain(assetData.votingAuthoritySigchain || '');
       setVotingAuthorityAccount(assetData.votingAuthorityAccount || '');
+      setVotingAuthorityGenesis(assetData.votingAuthorityGenesis || '');
       setNamedAssetCost(assetData.namedAssetCost || '');
       setNamedAccountCost(assetData.namedAccountCost || '');
       setSubmissionCost(assetData.submissionCost || '');
@@ -276,6 +282,7 @@ function AdminPageComponent() {
       setOrganizerName('');
       setOrganizerEmail('');
       setOrganizerTelegram('');
+      setHashtag('');
       setDeadline(calculateDefaultDeadline());
       setSummaryPro('');
       setSummaryCon('');
@@ -305,27 +312,44 @@ function AdminPageComponent() {
   }, [adminListFetched, jsonGuid, editingId, proxyRequest, BACKEND_BASE]);
 
   // ---------- PREPARE FILES FOR UPLOAD AND DISPLAY FILENAMES ----------
+  const allowedExtensions = {
+    md:        'text/markdown',
+    markdown:  'text/markdown',
+    txt:       'text/plain',
+    pdf:       'application/pdf',
+    doc:       'application/msword',
+    docx:      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    ppt:       'application/vnd.ms-powerpoint',
+    pptx:      'application/vnd.openxmlformats-officedocument.presentationml.presentation'
+  };
+  const allowedTypes = Object.values(allowedExtensions);
+
   const handleFileChange = async (e) => {
     const selectedFiles = Array.from(e.target.files);
-    const allowedExtensions = ['md', 'txt', 'pdf', 'doc', 'docx'];
+
     const filteredFiles = selectedFiles.filter(file => {
       const ext = file.name.split('.').pop().toLowerCase();
-      return allowedExtensions.includes(ext);
+      // Accept if extension is allowed, even if MIME type is missing or wrong
+      return Object.keys(allowedExtensions).includes(ext);
     });
+    
+    console.log('[handleFileChange] filteredFiles: ', filteredFiles);
 
     const docsWithMeta = await Promise.all(filteredFiles.map(async (file) => {
+      const ext = file.name.split('.').pop().toLowerCase();
+      const mappedType = allowedExtensions[ext] || file.type || 'application/octet-stream';
       if (file instanceof Blob) {
         const base64 = await new Promise((resolve, reject) => {
           const reader = new FileReader();
           reader.onload = () => resolve(reader.result.split(',')[1]);
           reader.onerror = () => reject('FileReader failed');
           reader.readAsDataURL(file);
-        });
+        }); // <-- Only one closing parenthesis here!
         const sha256 = await sha256FromFile(file);
         return {
           name: file.name,
           guid: crypto.randomUUID(),
-          type: file.type,
+          type: mappedType,
           base64,
           sha256
         };
@@ -343,23 +367,41 @@ function AdminPageComponent() {
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
+  /**
+   * Checks if the value is a valid hashtag:
+   * - Starts with a single '#'
+   * - Only one '#' character in the string
+   * - At least one character after the '#'
+   * @param {string} hashtag
+   * @returns {boolean}
+   */
+  function isValidHashtag(hashtag) {
+    if (typeof hashtag !== 'string') return false;
+    // Must start with '#' and have only one '#', and at least one character after it
+    return /^#[^#\s]+$/.test(hashtag);
+  }
+  
   const createVote = async () => {
     setIsSubmitting(true);
-    setMessage('Please wait while the voting issue data is submmitted...<br />First, the NXS must be claimed by the Voting Authority...<br />Then, several objects need to be written to the blockchain.<br />PLEASE BE PATIENT.');
+    setMessage('Please wait while the voting issue data is submitted...<br />First, the NXS must be claimed by the Voting Authority...<br />Then, several objects need to be written to the blockchain.<br />PLEASE BE PATIENT.');
+
     if (!title.trim() || !description.trim() || optionLabels.length < 2 || optionLabels.some(l => !l.trim())) {
       setMessage('Please fill in the title, description, and at least two valid option labels.');
+      setIsSubmitting(false);
       return;
     }
-    
+
     let assetName = '';
     let issueInfoGuid = '';
     let optionAccounts = [];
     let slugs = [];
     let uploadedDocs = [];
+    let resultToUse = null;
+
     if (!editingIdFromParams) {
       const safeTitle = title.toLowerCase().replace(/\W+/g, '-').substring(0, 32);
       let guid = crypto.randomUUID();
-      assetName = `vote-${safeTitle}-${createdAt}-${guid.slice(0, 8)}`
+      assetName = `vote-${safeTitle}-${createdAt}-${guid.slice(0, 8)}`;
 
       optionAccounts = optionLabels.map((label, idx) => {
         const optionSafe = label.toLowerCase().replace(/\W+/g, '-').substring(0, 20);
@@ -369,9 +411,8 @@ function AdminPageComponent() {
           label: label.trim()
         };
       });
-      
-      slugs = optionAccounts.map(acc => acc.name);
 
+      slugs = optionAccounts.map(acc => acc.name);
       issueInfoGuid = crypto.randomUUID();
     } else {
       assetName = assetData.slug;
@@ -379,7 +420,7 @@ function AdminPageComponent() {
       optionAccounts = assetData.account_slugs;
       slugs = assetData.account_slugs;
     }
-    
+
     const config = {
       description,
       summary_pro: summaryPro,
@@ -405,66 +446,121 @@ function AdminPageComponent() {
       title,
       description,
       deadline: parseInt(deadline),
+      hashtag: fixHashtag(hashtag),
       issueInfo: issueInfoGuid,
       creatorGenesis
     };
-    
+
     console.log('[createVote] assetConfig: ', assetConfig);
 
-    setIsUploading(true);
-    let foundBlob = false;
+    let txidString = '';
+    try {
+      const response = await secureApiCall('finance/debit/account', {
+        from: senderAddress,
+        to: votingAuthorityAccount,
+        amount: submissionCost
+      });
 
-    for (const doc of supportingDocs) {
-      if (doc.file instanceof Blob) {
-        foundBlob = true;
+      const result = response.data ?? response;
+
+      // If result is a string, parse and patch
+      let outputObj;
+      if (typeof result === "string") {
         try {
-          const reader = new FileReader();
-          const base64 = await new Promise((resolve, reject) => {
-            reader.onload = () => resolve(reader.result.split(',')[1]);
-            reader.onerror = () => reject('FileReader failed');
-            reader.readAsDataURL(doc.file);
+          outputObj = JSON.parse(result);
+        } catch (err) {
+          showErrorDialog({
+            message: "Unexpected response format",
+            note: result,
           });
-
-          const response = await proxyRequest(
-            `${BACKEND_BASE}/ipfs/upload`,
-            {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              data: {
-                name: doc.name,
-                guid: doc.guid,
-                mimeType: doc.type,
-                base64
-              }
-            }
-          );
-
-          if (!response?.data?.success) {
-            throw new Error(`Failed to upload ${doc.name}`);
-          }
-
-          uploadedDocs.push({
-            name: doc.name,
-            guid: doc.guid,
-            sha256: await sha256FromFile(doc.file),
-            is_analysis: doc.guid === analysisGuid
-          });
-        } catch (e) {
-          showErrorDialog({ message: `Upload failed for ${doc.name}`, note: e.message });
-          setIsUploading(false);
+          setIsSubmitting(false);
           return;
         }
+      } else {
+        outputObj = result;
+      }
+
+      // Normalize success to 1 if it's boolean true
+      if (outputObj && outputObj.success === true) {
+        outputObj.success = 1;
+      }
+
+      // Now your check will work as desired
+      if (!outputObj.success) {
+        showErrorDialog({
+          message: "NXS debit failed",
+          note: "No txid returned.",
+        });
+        setIsSubmitting(false);
+        return;
+      }
+      txidString = outputObj.txid?.toString?.() || '';
+      console.log('txidString: ', txidString);
+    } catch (e) {
+      showErrorDialog({
+        message: 'Error during sending voting issue creation fee',
+        note: e.message
+      });
+      setIsSubmitting(false);
+      return;
+    }
+
+    setIsUploading(true);
+
+    const serviceRes = await nexusVotingService.createVoteViaBackend(txidString, assetConfig, optionAccounts);
+    if (!serviceRes.success) {
+      showErrorDialog({
+        message: 'Failed to create vote asset',
+        note: serviceRes.error
+      });
+      setIsUploading(false);
+      setIsSubmitting(false);
+      return;
+    }
+    resultToUse = serviceRes;
+
+    console.log('[createVote] resultToUse: ', resultToUse);
+    console.log('[createVote] supportingDocs: ', supportingDocs);
+
+    // UPLOAD SUPPORTING DOCS
+    uploadedDocs = [];
+    for (const doc of supportingDocs) {
+      try {
+        const response = await proxyRequest(
+          `${BACKEND_BASE}/ipfs/upload`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            data: {
+              name: doc.name,
+              guid: doc.guid,
+              mimeType: doc.type,
+              base64: doc.base64
+            }
+          }
+        );
+
+        if (!response?.data?.success) {
+          throw new Error(`Failed to upload ${doc.name}`);
+        }
+
+        uploadedDocs.push({
+          name: doc.name,
+          guid: doc.guid,
+          sha256: doc.sha256, // Use precomputed hash!
+          is_analysis: doc.guid === analysisGuid
+        });
+      } catch (e) {
+        showErrorDialog({ message: `Upload failed for ${doc.name}`, note: e.message });
+        setIsUploading(false);
+        setIsSubmitting(false);
+        return;
       }
     }
-
     setIsUploading(false);
+    setSupportingDocs(uploadedDocs);
 
-    if (!foundBlob) {
-      setSupportingDocs([]);
-    } else {
-      setSupportingDocs(uploadedDocs);
-    }
-      
+    // UPLOAD THE MAIN ISSUE INFO JSON
     try {
       const uploadRes = await proxyRequest(`${BACKEND_BASE}/ipfs/upload`, {
         method: 'POST',
@@ -485,6 +581,7 @@ function AdminPageComponent() {
         message: 'Failed to upload issue_info.json to backend',
         note: err?.response?.data?.Message || err.message
       });
+      setIsSubmitting(false);
       return;
     }
 
@@ -492,7 +589,7 @@ function AdminPageComponent() {
       message: 'Success!',
       note: 'Vote created..'
     });
-  
+
     setIsSubmitting(false);
     setMessage('Submission complete!');
     return;
@@ -591,6 +688,8 @@ function AdminPageComponent() {
           <TextField label="Organizer Name" value={organizerName} onChange={(e) => setOrganizerName(e.target.value)} />
           <label htmlFor="organizerEmailTextField" style={{ marginBottom: '0.25rem' }}>Organizer Email</label>
           <TextField label="Organizer Email" value={organizerEmail} onChange={(e) => setOrganizerEmail(e.target.value)} />
+          <label htmlFor="hashtagTextField" style={{ marginBottom: '0.25rem' }}>Hashtag</label>
+          <TextField label="Hashtag" value={hashtag} onChange={(e) => setHashtag(e.target.value)} />
           <label htmlFor="telegramHandleTextField" style={{ marginBottom: '0.25rem' }}>Telegram Handle (optional)</label>
           <TextField label="Telegram Handle (optional)" value={organizerTelegram} onChange={(e) => setOrganizerTelegram(e.target.value)} />
         </FieldSet>
@@ -688,11 +787,11 @@ function AdminPageComponent() {
         </FieldSet>
         
         <FieldSet legend="Supporting Documents">
-          <p>Attach a markdown, text, PDF, or Word file to serve as the primary analysis document. You may also attach additional supporting documents.</p>
+          <p>Attach a markdown, text, PDF, Word, or PowerPoint file to serve as the primary analysis document. You may also attach additional supporting documents.</p>
           <input
             ref={fileInputRef}
             type="file"
-            accept=".md,.txt,.pdf, .doc, .docx"
+            accept=".md, .txt,.pdf, .doc, .docx, .ppt, .pptx"
             multiple
             onChange={handleFileChange}
             style={{ display: 'none' }}

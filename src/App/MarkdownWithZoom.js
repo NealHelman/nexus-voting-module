@@ -72,15 +72,17 @@ function MarkdownWithZoom({ children }) {
 
   return (
     <>
-      <ReactMarkdown
-        remarkPlugins={[remarkGfm]}
-        components={{
-          img: Img,
-          p: Paragraph
-        }}
-      >
-        {children}
-      </ReactMarkdown>
+      <div style={{ border: '2px solid grey', padding: '1em' }}>
+        <ReactMarkdown
+          remarkPlugins={[remarkGfm]}
+          components={{
+            img: Img,
+            p: Paragraph
+          }}
+        >
+          {children}
+        </ReactMarkdown>
+      </div>
       {/* Modal overlay for zoom */}
       {modalImg && (
         <div
