@@ -104,9 +104,13 @@ If your trust level meets the configured threshold, you'll be able to access an 
 You can subscribe to be notified of new voting issues via:
 
 - **Email:** A prompt in the Voting tab allows you to subscribe/unsubscribe using your email address and PIN. Emails are sent from *announcement@nexus-voting.com*.
+
 ![Example Email Announcement](https://raw.githubusercontent.com/NealHelman/nexus-voting-module/main/user_guide/screenshots/Example-Email-Announcement.jpg)
+
 - **Telegram:** New voting issues are optionally announced in a Nexus Community -General Telegram channel.
+
 ![Example Telegram Announcement](https://raw.githubusercontent.com/NealHelman/nexus-voting-module/main/user_guide/screenshots/Example-Telegram-Announcement.jpg)
+
 
 ## ❓ FAQ
 
