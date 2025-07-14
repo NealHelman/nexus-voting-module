@@ -20,9 +20,10 @@ Once installed, open the **Voting** tab in the Nexus wallet. There, you can:
 ![Voting Page](https://raw.githubusercontent.com/NealHelman/nexus-voting-module/main/user_guide//screenshots/VotingPage.jpg)
 
 - See a list of voting issues showing
-  -  creation date
+  - creation date
   - deadline when the voting ends
   - the title and all of the optins for the issue
+  - a hashtag to use when discussing the voting issue on Telegram or X
   - the number of votes cast for the issue as well as for each option
   - the weighted vote score for each each option
   - the per-option percent of weighted vote score (so you can easily tell which option is winning)
@@ -79,20 +80,15 @@ Once installed, open the **Voting** tab in the Nexus wallet. There, you can:
 If your trust level meets the configured threshold, you'll be able to access an **Admin** screen where you can:
 
 - Create a new voting issue
-
-- Enter metadata: title, description, pro/con summaries, outcomes,
-  deadline, etc.
-
+- Enter metadata: title, description, pro/con summaries, outcomes, deadline, etc.
   - Minimum trust score required to vote defaults to 10000
   - Deadline defaults to 30 days in the future
-
 - Upload supporting documents (text, Markdown, PDF, or Word) to the voting authority server
-
 - Submit the voting issue with a PIN prompt --- this sends NXS to the backend Voting Authority to fund asset and account creation
-
 - Documents can be deleted before submission if desired
 
 > ⛽ Cost: 2 NXS for the vote asset + 1 NXS per named voting option account
+> There can be a considerable period of time to wait when submitting voting issues. The time it takes depends on the speed of the network to confirm your transaction to provide the voting authority with NXS for the fees required to create the asset and the voting option accounts, and the system waits 10 seconds between transactions so as to not incur additional fees.
 
 ## 📊 Vote Counting and Security
 
