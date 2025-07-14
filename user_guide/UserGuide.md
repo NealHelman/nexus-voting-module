@@ -41,7 +41,7 @@ Once installed, open the **Voting** tab in the Nexus wallet. There, you can:
 
 ### 🔍 View Details for an Individual Voting Issue
 
-![Voting Issue Details Page - #1](https://raw.githubusercontent.com/NealHelman/nexus-voting-module/main/user_guide//screenshots/Issue-Details-Top.jpg)![Voting Issue Details Page - #2](https://raw.githubusercontent.com/NealHelman/nexus-voting-module/main/user_guide//screenshots/Issue-Details-Middle1.jpg)![Voting Issue Details Page - #3](https://raw.githubusercontent.com/NealHelman/nexus-voting-module/main/user_guide//screenshots/Issue-Details-Middle2.jpg)
+![Voting Issue Details Page - #1](https://raw.githubusercontent.com/NealHelman/nexus-voting-module/main/user_guide/screenshots/Issue-Details-Top.jpg)![Voting Issue Details Page - #2](https://raw.githubusercontent.com/NealHelman/nexus-voting-module/main/user_guide/screenshots/Issue-Details-Middle1.jpg)![Voting Issue Details Page - #3](https://raw.githubusercontent.com/NealHelman/nexus-voting-module/main/user_guide/screenshots/Issue-Details-Middle2.jpg)
 
 - See the title, description, organizer, email address, and Telegram handle
 - Read summaries of each position (Pro and Con)
@@ -73,9 +73,9 @@ Once installed, open the **Voting** tab in the Nexus wallet. There, you can:
 
 ## 🧾 Submitting Voting Issues *(Admin Only)*
 
-![Entering/Editing Voting Issues - #1]https://raw.githubusercontent.com/NealHelman/nexus-voting-module/main/user_guide/screenshots/Enter-New-Voting-Issue-Top.jpg)![Entering/Editing Voting Issues - #2](https://raw.githubusercontent.com/NealHelman/nexus-voting-module/main/user_guide//screenshots/Enter-New-Voting-Issue-Middle.jpg)![Entering/Editing Voting Issues - #3](https://raw.githubusercontent.com/NealHelman/nexus-voting-module/main/user_guide//screenshots/Enter-New-Voting-Issue-Bottom.jpg)
+![Entering/Editing Voting Issues - #1]https://raw.githubusercontent.com/NealHelman/nexus-voting-module/main/user_guide/screenshots/Enter-New-Voting-Issue-Top.jpg)![Entering/Editing Voting Issues - #2](https://raw.githubusercontent.com/NealHelman/nexus-voting-module/main/user_guide/screenshots/Enter-New-Voting-Issue-Middle.jpg)![Entering/Editing Voting Issues - #3](https://raw.githubusercontent.com/NealHelman/nexus-voting-module/main/user_guide//screenshots/Enter-New-Voting-Issue-Bottom.jpg)
 
-![Entering/Editing Voting Issues - #4](./screenshots/Edit-Voting-Issue-Top.jpg)![Entering/Editing Voting Issues - #5](./screenshots/Edit-Voting-Issue-Supporting-Docs.jpg)![Entering/Editing Voting Issues - #6](./screenshots/Edit-Voting-Issue-Options.jpg)
+![Entering/Editing Voting Issues - #4](https://raw.githubusercontent.com/NealHelman/nexus-voting-module/main/user_guide/screenshots/Edit-Voting-Issue-Top.jpg)![Entering/Editing Voting Issues - #5](https://raw.githubusercontent.com/NealHelman/nexus-voting-module/main/user_guide/screenshots/Edit-Voting-Issue-Supporting-Docs.jpg)![Entering/Editing Voting Issues - #6](https://raw.githubusercontent.com/NealHelman/nexus-voting-module/main/user_guide/screenshots/Edit-Voting-Issue-Options.jpg)
 
 If your trust level meets the configured threshold, you'll be able to access an **Admin** screen where you can:
 
@@ -104,7 +104,9 @@ If your trust level meets the configured threshold, you'll be able to access an 
 You can subscribe to be notified of new voting issues via:
 
 - **Email:** A prompt in the Voting tab allows you to subscribe/unsubscribe using your email address and PIN. Emails are sent from *announcement@nexus-voting.com*.
+![Example Email Announcement](https://raw.githubusercontent.com/NealHelman/nexus-voting-module/main/user_guide/screenshots/Example-Email-Announcement.jpg)
 - **Telegram:** New voting issues are optionally announced in a Nexus Community -General Telegram channel.
+![Example Telegram Announcement](https://raw.githubusercontent.com/NealHelman/nexus-voting-module/main/user_guide/screenshots/Example-Telegram-Announcement.jpg)
 
 ## ❓ FAQ
 
