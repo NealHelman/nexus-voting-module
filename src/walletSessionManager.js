@@ -1,12 +1,9 @@
 import { persistor } from './store';
 
-const {
-  utilities: { uiSessionId },
-} = NEXUS;
 
 const LAST_SESSION_KEY = 'persist:lastWalletSession';
 
-const currentSession = uiSessionId();
+const currentSession = '';//uiSessionId();
 const lastSession = localStorage.getItem(LAST_SESSION_KEY);
 
 console.log('currentSession: ', currentSession); 

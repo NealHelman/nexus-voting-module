@@ -3,7 +3,7 @@ import { useDispatch, useSelector } from 'react-redux';
 import { decompressFromBase64 } from 'lz-string';
 import MarkdownWithZoom from "./MarkdownWithZoom";
 import nexusVotingService from '../services/nexusVotingService';
-import { copyright } from '../utils/copyright.js';
+import { Copyright } from '../utils/copyright.js';
 import nxsPackage from '../../nxs_package.json' with { type: "json" };
 
 const { version } = nxsPackage;
@@ -786,12 +786,7 @@ function IssuePage() {
             Donate
           </Button>
         </div>
-        <div style={{ justifySelf: 'end' }}>
-          {copyright}
-          <Tooltip.Trigger tooltip="Mostly GitHub CoPilot, and smidgen of ChatGPT">
-            <span style={{ cursor: 'pointer', color: '#00b7fa', marginLeft: 6 }}>AI.</span>
-          </Tooltip.Trigger>
-        </div>
+        <Copyright />
       </div>
       {isDonating && (
         <Modal 

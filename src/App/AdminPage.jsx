@@ -5,7 +5,7 @@ import nexusVotingService from '../services/nexusVotingService';
 import axios from 'axios';
 import { Link, useNavigate, useLocation, useSearchParams, useParams } from 'react-router-dom';
 import { sha256FromFile } from '../utils/ipfs';
-import { copyright } from '../utils/copyright.js';
+import { Copyright } from '../utils/copyright.js';
 import nxsPackage from '../../nxs_package.json' with { type: "json" };
 
 const { version } = nxsPackage;
@@ -806,12 +806,7 @@ function AdminPageComponent() {
             Donate
           </Button>
         </div>
-        <div style={{ justifySelf: 'end' }}>
-          {copyright}
-          <Tooltip.Trigger tooltip="Mostly GitHub CoPilot, and smidgen of ChatGPT">
-            <span style={{ cursor: 'pointer', color: '#00b7fa', marginLeft: 6 }}>AI.</span>
-          </Tooltip.Trigger>
-        </div>
+        <Copyright />
       </div>
       {isDonating && (
         <Modal 

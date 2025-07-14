@@ -1,11 +1,11 @@
 import { Link, useNavigate, useSearchParams, useParams } from 'react-router-dom';
 import MarkdownWithZoom from "./MarkdownWithZoom";
-import { copyright } from '../utils/copyright.js';
+import { Copyright } from '../utils/copyright.js';
 import nxsPackage from '../../nxs_package.json' with { type: "json" };
 
 const { version } = nxsPackage;
 const React = NEXUS.libraries.React;
-const userGuideUrl = 'UserGuide.md';
+const userGuideUrl = 'https://raw.githubusercontent.com/NealHelman/nexus-voting-module/main/path/to/UserGuide.md';
 
 function UserGuidePage() {
   const {
@@ -74,10 +74,7 @@ function UserGuidePage() {
           {/* Left-justified content here */}
           version {version}
         </div>
-        <div>
-          {/* Right-justified content here */}
-          {copyright}
-        </div>
+        <Copyright />
         </div>
     </Panel>
   );

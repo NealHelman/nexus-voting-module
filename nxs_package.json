@@ -1,3 +1,4 @@
+
 {
   "name": "nexus-voting-module",
   "displayName": "Nexus Community On-Chain Voting Module",
@@ -12,6 +13,7 @@
             "dist/refresh.svg", 
             "dist/document.svg", 
             "dist/binoculars.svg", 
+            "dist/Neal.png",
             "dist/js/app.js",
             ],
   "author": {

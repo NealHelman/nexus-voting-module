@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { Link } from 'react-router-dom';
 import { decompressFromBase64  } from 'lz-string';
 import nexusVotingService from '../services/nexusVotingService';
-import { copyright } from '../utils/copyright.js';
+import { Copyright } from '../utils/copyright.js';
 import AdminPage from './AdminPage';
 import IssuePage from './IssuePage';
 import nxsPackage from '../../nxs_package.json' with { type: "json" };
@@ -18,7 +18,7 @@ function VotingPageComponent() {
   
   const {
     components: { Button, Modal, Panel, Dropdown, FieldSet, TextField, Tooltip },
-    utilities: { apiCall, confirm, proxyRequest, updateState, secureApiCall, showErrorDialog, showSuccessDialog },
+    utilities: { apiCall, confirm, proxyRequest, updateState, secureApiCall, showErrorDialog, showSuccessDialog, uiSessionId },
   } = NEXUS;
   
   // Voting state from Redux
@@ -791,12 +791,7 @@ function VotingPageComponent() {
             Donate
           </Button>
         </div>
-        <div style={{ justifySelf: 'end' }}>
-          {copyright}
-          <Tooltip.Trigger tooltip="Mostly GitHub CoPilot, and smidgen of ChatGPT">
-            <span style={{ cursor: 'pointer', color: '#00b7fa', marginLeft: 6 }}>AI.</span>
-          </Tooltip.Trigger>
-        </div>
+        <Copyright />
       </div>
       {isDonating && (
         <Modal 
