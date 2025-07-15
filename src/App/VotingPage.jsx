@@ -723,124 +723,126 @@ function VotingPageComponent() {
           </p>
         </div>
       </FieldSet>
-      <FieldSet legend={votesFieldsetLegend} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1rem' }}>
-        <div style={{ display: 'flex', justifyContent: 'center', gap: '1rem', marginBottom: '1rem', marginTop: '1rem' }}>
-          {status === "loading" ? (
-            <span style={{ color: 'red' }}>Loading...</span>
-          ) : status === "searching" ? (
-            <span style={{ color: 'red' }}>Searching...</span>
-          ) : (
-            (() => {
-              const filteredVotes = voteList
-                .filter(vote => vote.min_trust === undefined || userTrust >= vote.min_trust)
-                .filter(vote => {
-                  const now = Date.now() / 1000;
-                  if (filter === 'active') return !vote.deadline || vote.deadline > now;
-                  if (filter === 'closed') return vote.deadline && vote.deadline <= now;
-                  return true;
-                })
+      {userVotesCast && totalNumberOfVotingIssues &&
+        <FieldSet legend={votesFieldsetLegend} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1rem' }}>
+          <div style={{ display: 'flex', justifyContent: 'center', gap: '1rem', marginBottom: '1rem', marginTop: '1rem' }}>
+            {status === "loading" ? (
+              <span style={{ color: 'red' }}>Loading...</span>
+            ) : status === "searching" ? (
+              <span style={{ color: 'red' }}>Searching...</span>
+            ) : (
+              (() => {
+                const filteredVotes = voteList
+                  .filter(vote => vote.min_trust === undefined || userTrust >= vote.min_trust)
+                  .filter(vote => {
+                    const now = Date.now() / 1000;
+                    if (filter === 'active') return !vote.deadline || vote.deadline > now;
+                    if (filter === 'closed') return vote.deadline && vote.deadline <= now;
+                    return true;
+                  })
 
-              if (filteredVotes.length === 0) {
-                return <p>No voting issues to display for this filter.</p>;
-              }
+                if (filteredVotes.length === 0) {
+                  return <p>No voting issues to display for this filter.</p>;
+                }
 
-              return (
-                <ul>
-                  {filteredVotes.map((vote) => (
-                    <li key={vote.address}>
-                      <div
-                        key={vote.slug}
-                        style={{
-                          display: 'flex',
-                          justifyContent: 'space-between',
-                          alignItems: 'flex-start',
-                          gap: '1rem',
-                          padding: '1rem 0',
-                          borderBottom: '1px solid #ccc'
-                        }}
-                      >
-                        <div style={{ flex: 1 }}>
-                          <div style={{ fontWeight: 'bold', marginBottom: '0.25rem', color: '#00b7fa' }}>{vote.title}</div>
-                          <div style={{ fontSize: '0.9rem', lineHeight: '1.4' }}>
-                            <div>Hashtag: {vote.hashtag}</div>
-                            <div>Created On: {new Date(vote.created_at * 1000).toLocaleDateString()}</div>
-                            <div>Deadline: {new Date(vote.deadline * 1000).toLocaleDateString()}</div>
-                            <div>Number of Votes Cast: {vote.voteCount?.toLocaleString() ?? '0'}</div>
+                return (
+                  <ul>
+                    {filteredVotes.map((vote) => (
+                      <li key={vote.address}>
+                        <div
+                          key={vote.slug}
+                          style={{
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'flex-start',
+                            gap: '1rem',
+                            padding: '1rem 0',
+                            borderBottom: '1px solid #ccc'
+                          }}
+                        >
+                          <div style={{ flex: 1 }}>
+                            <div style={{ fontWeight: 'bold', marginBottom: '0.25rem', color: '#00b7fa' }}>{vote.title}</div>
+                            <div style={{ fontSize: '0.9rem', lineHeight: '1.4' }}>
+                              <div>Hashtag: {vote.hashtag}</div>
+                              <div>Created On: {new Date(vote.created_at * 1000).toLocaleDateString()}</div>
+                              <div>Deadline: {new Date(vote.deadline * 1000).toLocaleDateString()}</div>
+                              <div>Number of Votes Cast: {vote.voteCount?.toLocaleString() ?? '0'}</div>
+                            </div>
                           </div>
-                        </div>
 
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', minWidth: '130px' }}>
-                          <Button 
-                            style={{ width: '100%' }}
-                            onClick={() => handleViewOrEdit('view', vote)}
-                          >
-                            Details/Vote
-                          </Button>
-                          {vote.creatorGenesis === genesis && (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', minWidth: '130px' }}>
                             <Button 
                               style={{ width: '100%' }}
-                              onClick={() => handleViewOrEdit('edit', vote)}
+                              onClick={() => handleViewOrEdit('view', vote)}
                             >
-                              Edit
+                              Details/Vote
                             </Button>
-                          )}
+                            {vote.creatorGenesis === genesis && (
+                              <Button 
+                                style={{ width: '100%' }}
+                                onClick={() => handleViewOrEdit('edit', vote)}
+                              >
+                                Edit
+                              </Button>
+                            )}
+                          </div>
                         </div>
-                      </div>
-                      {vote.account_addresses && (
-                        <ul style={{ fontSize: '0.9rem' }}>
-                          {(() => {
-                            // Gather all addresses for weighted sum
-                            const optionAddresses = vote.account_addresses?.map(opt => typeof opt === 'string' ? opt : opt.address) || [];
-                            const optionWeightedCounts = optionAddresses.map(addr => weightedVoteCounts?.[vote.slug]?.[addr] ?? 0);
-                            const totalWeighted = optionWeightedCounts.reduce((acc, count) => acc + Number(count), 0);
+                        {vote.account_addresses && (
+                          <ul style={{ fontSize: '0.9rem' }}>
+                            {(() => {
+                              // Gather all addresses for weighted sum
+                              const optionAddresses = vote.account_addresses?.map(opt => typeof opt === 'string' ? opt : opt.address) || [];
+                              const optionWeightedCounts = optionAddresses.map(addr => weightedVoteCounts?.[vote.slug]?.[addr] ?? 0);
+                              const totalWeighted = optionWeightedCounts.reduce((acc, count) => acc + Number(count), 0);
 
-                            return vote.account_addresses.map((opt, idx) => {
-                              // Use the object's properties
-                              const label = vote.option_labels?.[idx] || `Option ${idx + 1}`;
-                              const name = opt.name || ''; // The option's name (e.g., "opt-yes-dc9d9622")
-                              const address = opt.address || opt; // Support both object and string, just in case
-                              const weightedCount = Number(weightedVoteCounts?.[vote.slug]?.[address] ?? 0);
-                              const percent = totalWeighted > 0 ? (weightedCount / totalWeighted) * 100 : 0;
-                              return (
-                                <li key={address}>
-                                  <div>
-                                    <strong>{label}</strong> - {(weightedCount / 1e8).toLocaleString(undefined, { maximumFractionDigits: 2 })} weighted NXS
-                                    <span style={{ marginLeft: '0.5em', color: '#888' }}>
-                                      ({percent.toFixed(2)}%)
-                                    </span>
-                                  </div>
-                                </li>
-                              );
-                            });
-                          })()}
-                        </ul>
-                      )}
-                      <hr />
-                    </li>
-                  ))}
-                </ul>
-              );
-            })()
-          )}
-        </div>
-        <div style={{ display: 'flex', justifyContent: 'center', gap: '1rem', marginTop: '1rem', flexWrap: 'wrap' }}>
-          <Button onClick={() => setCurrentPage(p => Math.max(p - 1, 1))} disabled={currentPage === 1}>
-            Previous
-          </Button>
-          {[...Array(totalPages)].map((_, idx) => (
-            <Button
-              key={idx + 1}
-              variant={currentPage === idx + 1 ? 'filled' : 'outline'}
-              onClick={() => setCurrentPage(idx + 1)}
-            >
-              {idx + 1}
+                              return vote.account_addresses.map((opt, idx) => {
+                                // Use the object's properties
+                                const label = vote.option_labels?.[idx] || `Option ${idx + 1}`;
+                                const name = opt.name || ''; // The option's name (e.g., "opt-yes-dc9d9622")
+                                const address = opt.address || opt; // Support both object and string, just in case
+                                const weightedCount = Number(weightedVoteCounts?.[vote.slug]?.[address] ?? 0);
+                                const percent = totalWeighted > 0 ? (weightedCount / totalWeighted) * 100 : 0;
+                                return (
+                                  <li key={address}>
+                                    <div>
+                                      <strong>{label}</strong> - {(weightedCount / 1e8).toLocaleString(undefined, { maximumFractionDigits: 2 })} weighted NXS
+                                      <span style={{ marginLeft: '0.5em', color: '#888' }}>
+                                        ({percent.toFixed(2)}%)
+                                      </span>
+                                    </div>
+                                  </li>
+                                );
+                              });
+                            })()}
+                          </ul>
+                        )}
+                        <hr />
+                      </li>
+                    ))}
+                  </ul>
+                );
+              })()
+            )}
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'center', gap: '1rem', marginTop: '1rem', flexWrap: 'wrap' }}>
+            <Button onClick={() => setCurrentPage(p => Math.max(p - 1, 1))} disabled={currentPage === 1}>
+              Previous
             </Button>
-          ))}
-          <Button onClick={() => setCurrentPage(p => Math.min(p + 1, totalPages))} disabled={currentPage === totalPages}>
-            Next
-          </Button>
-        </div>
-      </FieldSet>
+            {[...Array(totalPages)].map((_, idx) => (
+              <Button
+                key={idx + 1}
+                variant={currentPage === idx + 1 ? 'filled' : 'outline'}
+                onClick={() => setCurrentPage(idx + 1)}
+              >
+                {idx + 1}
+              </Button>
+            ))}
+            <Button onClick={() => setCurrentPage(p => Math.min(p + 1, totalPages))} disabled={currentPage === totalPages}>
+              Next
+            </Button>
+          </div>
+        </FieldSet>
+      }
       
       <div style={{
         display: 'grid',
