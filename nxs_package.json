@@ -1,7 +1,7 @@
 {
   "name": "nexus-voting-module",
   "displayName": "Nexus Community On-Chain Voting Module",
-  "version": "0.3.0",
+  "version": "0.3.0-alpha",
   "targetWalletVersion": "3.2.0",
   "description": "Nexus Community On-Chain Voting module for Nexus Interface",
   "type": "app",

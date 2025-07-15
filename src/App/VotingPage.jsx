@@ -65,7 +65,9 @@ function VotingPageComponent() {
   const [status, setStatus] = React.useState("idle");
   const [loading, setLoading] = React.useState(true);
   const [searchKey, setSearchKey] = React.useState('');
-
+  const [totalNumberOfVotingIssues, setTotalNumberOfVotingIssues] = React.useState(0);
+  const [votesFieldsetLegend, setVotesFieldsetLegend] = React.useState(0);
+  
   // View state (cache meta)
   const setCurrentPage = (page) => {
     dispatch({ type: 'SET_CURRENT_PAGE', payload: page });
@@ -123,8 +125,9 @@ function VotingPageComponent() {
   // ----------- LOAD VOTES LOGIC -----------
   const loadVotes = React.useCallback(
     async (page = 1, keyInput = '', searchInput = '') => {
-      (setStatus == '' ? "loading" : "searching");
-      if (backendAvailable !== true || !votingAuthorityGenesis) return;
+      setStatus(searchInput == '' ? "loading" : "searching");
+      if (!backendAvailable || votingAuthorityGenesis == '') return;
+      console.log('loadVotes entry');
       setLoading(true); 
 
       const backendListening = await pingBackend();
@@ -407,17 +410,16 @@ function VotingPageComponent() {
   // ----------- GET WALLET USER'S VOTING HISTORY -----------
   React.useEffect(() => {
     const fetchVotesCast = async () => {
-      if (!genesis || senderAddress == '' || backendAvailable !== true) return;
-      if (!userVotesCast) {
+      if (!genesis || senderAddress == '' || !backendAvailable) return;
+        setVotesFieldsetLegend('Loading...');
         const response = await proxyRequest(
           `${BACKEND_BASE}/votes-cast/${genesis}?senderAddress=${encodeURIComponent(senderAddress)}&votingAuthorityGenesis=${votingAuthorityGenesis}`,
           { method: 'GET' }
         );
-        console.log('fetchVotesCast::response', response);
         setUserVotesCast(response.data.votesCast || 0);
-      }
-    };
-    fetchVotesCast();
+        setTotalNumberOfVotingIssues(response.data.totalNumberOfVotingIssues || 0);
+      };
+      fetchVotesCast();
   }, [backendAvailable, genesis, senderAddress]);
 
   // ----------- EXPOSE SETTINGS FOR DEBUGGING -----------
@@ -471,8 +473,10 @@ function VotingPageComponent() {
   
   // ----------- HELPER FUNCTION TO RELOAD THIS PAGE FROM SCRATCH -----------
   const handleRefresh = () => {
+    dispatch({ type: 'SET_VOTE_LIST_FETCHED', payload: false });
     setVotingAuthoritySigchain('');
     setCurrentPage(1);
+    loadVotes(1, '', '');
   };
   
   const resetEmailModal = async () => {
@@ -532,6 +536,18 @@ function VotingPageComponent() {
     setDonationAmount(0);
     setIsDonating(false);
   };
+  
+  React.useEffect(() => {
+    if (!votesPerPage || !totalNumberOfVotingIssues) return;
+    let display = '';
+    if (votesPerPage < totalNumberOfVotingIssues) {
+      display = `${totalNumberOfVotingIssues} of ${totalNumberOfVotingIssues}`;
+    } else {
+      display = `${votesPerPage} of ${totalNumberOfVotingIssues}`;
+    }
+    const output = `Voting Issues (Filtered & Sorted) - Showing ${totalNumberOfVotingIssues} of ${totalNumberOfVotingIssues} Total Votes`;
+    setVotesFieldsetLegend(output);
+  }, [backendAvailable, votesPerPage, totalNumberOfVotingIssues]);
   
   return (
     <Panel title="Nexus Community On-Chain Voting - Issues Available" icon={{ url: 'voting.svg', id: 'icon' }}>
@@ -707,7 +723,7 @@ function VotingPageComponent() {
           </p>
         </div>
       </FieldSet>
-      <FieldSet legend='Voting Issues (Filtered & Sorted)' style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1rem' }}>
+      <FieldSet legend={votesFieldsetLegend} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1rem' }}>
         <div style={{ display: 'flex', justifyContent: 'center', gap: '1rem', marginBottom: '1rem', marginTop: '1rem' }}>
           {status === "loading" ? (
             <span style={{ color: 'red' }}>Loading...</span>
