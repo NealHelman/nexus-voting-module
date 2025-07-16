@@ -92,7 +92,7 @@ If your trust level meets the configured threshold, you'll be able to access an 
 
 ## 📊 Vote Counting and Security
 
-- Vote counts are weighted sums based on each voter's trust and stake.
+- Vote counts are weighted sums based on the formulae introduced in the Nexus Protocol whitepaper.  This prevents monopolization and gaming of the voting system.
 - Tallying reads the *contracts.reference* from each debit transaction to retrieve vote weights.
 - Only the most recent valid vote per sigchain is included in the total.
 - Votes are pseudonymous: they are public on-chain but tied to a sigchain hash, not your name.
