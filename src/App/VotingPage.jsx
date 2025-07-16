@@ -382,27 +382,55 @@ function VotingPageComponent() {
     };
 
     const checkTrust = async () => {
-      if (!userTrust && !userWeight) {
-        if (genesis == 'a1136efff18116f02d5546678213aaaae1abd406cf9ca4d068c75af56bc5ce49') {
-          setUserTrust(1000000);
-          setUserWeight(1000000 * 30000);
-          setCanAccessAdmin(1);
-        } else {
-          try {
-            const response = await apiCall('finance/list/trust/trust,stake', { name: 'trust' });
-            const trust = response?.[0]?.trust || 0;
-            const stake = response?.[0]?.stake || 0;
-            setUserTrust(trust);
-            setUserWeight(trust * stake);
-            if (trust >= minTrust) setCanAccessAdmin(1);
-          } catch (e) {
-            showErrorDialog({ message: 'Failed to retrieve trust level', note: e.message });
-            setCanAccessAdmin(0);
-          }
-        }
-      }
-    };
+      try {
+        // 1. User's Trust and Stake
+        const response = await apiCall('finance/list/trust/trust,stake', { name: 'trust' });
+        const trust = response[0].trust || 0;
+        const stake = response[0].stake || 0;
+        
+        console.log("User's Trust and Stake: ", response, trust, stake);
 
+        // 2. Total Network Stake
+        const metricsResponse = await apiCall('system/get/metrics', {});
+        const totalStake = metricsResponse.trust.stake || 1;
+        
+        console.log('Total Network Stake: ', metricsResponse, totalStake);
+
+        // 3. Genesis Timestamp (Participation Start)
+        const genesisTxResponse = await apiCall(
+          'ledger/list/transactions/timestamp',
+          { verbose: 'summary', where: 'results.contracts.OP=GENESIS' }
+        );
+        
+        const now = Date.now() / 1000;
+        const genesisTime = genesisTxResponse[0].timestamp || now;
+        const participationTime = Math.max(1, Math.floor((now - genesisTime) / (60 * 60 * 24))); // days
+        
+        console.log('Genesis Timestamp (Participation Start): ', genesisTxResponse);
+        console.log('Genesis Timestamp (Participation Start): ', genesisTime);
+        console.log('Genesis Timestamp (Participation Start): ', participationTime);
+
+        // 4. Compute Voting Weight
+        const x = stake / totalStake;
+        console.log('x: ', x);
+        const D_b = 1 / (1 + 10 * Math.exp(-x + 6));
+        console.log('D_b: ', D_b);
+        const W = (Math.pow(stake, 1.618) / 14.4) + stake;
+        console.log('W: ', W);
+        const R = W * participationTime;
+        console.log('R: ', R);
+        const S_b = D_b * R;
+        console.log('S_b: ', S_b);
+
+        setUserTrust(trust);
+        setUserWeight(S_b);
+        if (trust >= minTrust) setCanAccessAdmin(1);
+
+      } catch (e) {
+        showErrorDialog({ message: 'Failed to retrieve trust level', note: e.message });
+        setCanAccessAdmin(0);
+      }
+    }    
     checkSubscriptionStatus();
     checkTrust();
   }, [backendAvailable, genesis, minTrust, senderAddress]);
@@ -712,13 +740,13 @@ function VotingPageComponent() {
       <FieldSet legend='Your Voting Power' style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1rem' }}>
         <div style={{ display: 'flex', gap: '1rem', marginBottom: '1rem', marginTop: '1rem' }}>
           <p>
-            Your Trust Score: {(userTrust ?? 0).toLocaleString()} |{' '}
-            Your Voting Weight: {(Number(userWeight) / 1e8).toLocaleString(undefined, { maximumFractionDigits: 2 })} |{' '}
+            Your Trust Score: <strong>{(userTrust ?? 0).toLocaleString()} |{' '}</strong>
+            Your Voting Weight: <strong>{(Number(userWeight).toLocaleString(undefined, { maximumFractionDigits: 6 }))} |{' '}</strong>
             Number of Votes You've Cast:
             {!userVotesCast && userVotesCast != 0 ? (
               <> <span style={{ color: 'red' }}>(loading...)</span></>
             ) : (
-              <> {userVotesCast.toLocaleString()} </>
+              <> <strong>{userVotesCast.toLocaleString()}</strong> </>
             )}
           </p>
         </div>
