@@ -199,6 +199,7 @@ function AdminPageComponent() {
     nexusVotingService.getProtectedValues().then(({ data }) => {
       setVotingAuthoritySigchain(data.VOTING_AUTHORITY_SIGCHAIN);
       setVotingAuthorityAccount(data.VOTING_AUTHORITY_ACCOUNT);
+      setVotingAuthorityGenesis(data.VOTING_AUTHORITY_GENESIS);
       setNamedAssetCost(data.NAMED_ASSET_COST);
       setNamedAccountCost(data.NAMED_ACCOUNT_COST);
     });

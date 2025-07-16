@@ -382,20 +382,17 @@ function VotingPageComponent() {
     };
 
     const checkTrust = async () => {
+      if (userWeight == 0) return;
       try {
         // 1. User's Trust and Stake
         const response = await apiCall('finance/list/trust/trust,stake', { name: 'trust' });
         const trust = response[0].trust || 0;
         const stake = response[0].stake || 0;
         
-        console.log("User's Trust and Stake: ", response, trust, stake);
-
         // 2. Total Network Stake
         const metricsResponse = await apiCall('system/get/metrics', {});
         const totalStake = metricsResponse.trust.stake || 1;
         
-        console.log('Total Network Stake: ', metricsResponse, totalStake);
-
         // 3. Genesis Timestamp (Participation Start)
         const genesisTxResponse = await apiCall(
           'ledger/list/transactions/timestamp',
@@ -406,10 +403,6 @@ function VotingPageComponent() {
         const genesisTime = genesisTxResponse[0].timestamp || now;
         const participationTime = Math.max(1, Math.floor((now - genesisTime) / (60 * 60 * 24))); // days
         
-        console.log('Genesis Timestamp (Participation Start): ', genesisTxResponse);
-        console.log('Genesis Timestamp (Participation Start): ', genesisTime);
-        console.log('Genesis Timestamp (Participation Start): ', participationTime);
-
         // 4. Compute Voting Weight
         const x = stake / totalStake;
         console.log('x: ', x);
@@ -438,16 +431,17 @@ function VotingPageComponent() {
   // ----------- GET WALLET USER'S VOTING HISTORY -----------
   React.useEffect(() => {
     const fetchVotesCast = async () => {
-      if (!genesis || senderAddress == '' || !backendAvailable) return;
-        setVotesFieldsetLegend('Loading...');
-        const response = await proxyRequest(
-          `${BACKEND_BASE}/votes-cast/${genesis}?senderAddress=${encodeURIComponent(senderAddress)}&votingAuthorityGenesis=${votingAuthorityGenesis}`,
-          { method: 'GET' }
-        );
-        setUserVotesCast(response.data.votesCast || 0);
-        setTotalNumberOfVotingIssues(response.data.totalNumberOfVotingIssues || 0);
-      };
-      fetchVotesCast();
+      if (!genesis || senderAddress == '' || votingAuthorityGenesis == '' || !backendAvailable) return;
+      if (userVotesCast > 0 && totalNumberOfVotingIssues > 0) return;
+      setVotesFieldsetLegend('Loading...');
+      const response = await proxyRequest(
+        `${BACKEND_BASE}/votes-cast/${genesis}?senderAddress=${encodeURIComponent(senderAddress)}&votingAuthorityGenesis=${votingAuthorityGenesis}`,
+        { method: 'GET' }
+      );
+      setUserVotesCast(response.data.votesCast || 0);
+      setTotalNumberOfVotingIssues(response.data.totalNumberOfVotingIssues || 0);
+    };
+    fetchVotesCast();
   }, [backendAvailable, genesis, senderAddress]);
 
   // ----------- EXPOSE SETTINGS FOR DEBUGGING -----------
@@ -503,6 +497,9 @@ function VotingPageComponent() {
   const handleRefresh = () => {
     dispatch({ type: 'SET_VOTE_LIST_FETCHED', payload: false });
     setVotingAuthoritySigchain('');
+    setUserWeight(0);
+    setUserVotesCast(0);
+    setTotalNumberOfVotingIssues(0);
     setCurrentPage(1);
     loadVotes(1, '', '');
   };
@@ -566,7 +563,7 @@ function VotingPageComponent() {
   };
   
   React.useEffect(() => {
-    if (!votesPerPage || !totalNumberOfVotingIssues) return;
+    if (!votesPerPage || totalNumberOfVotingIssues == 0) return;
     let display = '';
     if (votesPerPage < totalNumberOfVotingIssues) {
       display = `${totalNumberOfVotingIssues} of ${totalNumberOfVotingIssues}`;
@@ -751,7 +748,6 @@ function VotingPageComponent() {
           </p>
         </div>
       </FieldSet>
-      {userVotesCast && totalNumberOfVotingIssues &&
         <FieldSet legend={votesFieldsetLegend} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1rem' }}>
           <div style={{ display: 'flex', justifyContent: 'center', gap: '1rem', marginBottom: '1rem', marginTop: '1rem' }}>
             {status === "loading" ? (
@@ -794,6 +790,13 @@ function VotingPageComponent() {
                               <div>Hashtag: {vote.hashtag}</div>
                               <div>Created On: {new Date(vote.created_at * 1000).toLocaleDateString()}</div>
                               <div>Deadline: {new Date(vote.deadline * 1000).toLocaleDateString()}</div>
+                              <div>Minimum Trust Required:
+                              {userTrust >= vote.min_trust ? (
+                                <span style={{ color: 'green' }}> {(Number(vote.min_trust).toLocaleString(undefined, { maximumFractionDigits: 6 }))}</span>
+                              ) : (
+                                <span style={{ color: 'red' }}> {(Number(vote.min_trust).toLocaleString(undefined, { maximumFractionDigits: 6 }))}</span>
+                              )}
+                              </div>
                               <div>Number of Votes Cast: {vote.voteCount?.toLocaleString() ?? '0'}</div>
                             </div>
                           </div>
