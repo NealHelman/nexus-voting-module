@@ -32,7 +32,11 @@ const initialState = {
   votingAuthoritySigchain: '',
   votingAuthorityAccount: '',
   votingAuthorityGenesis: '',
-  donationRecipient:''
+  donationRecipient: '',
+  fetchedAt: null,
+  totalNumberOfVotingIssues: 0,
+  votesFieldsetLegend: 'Voting Issues (Filtered & Sorted) - Showing 0 of 0 Total Votes'
+
 };
 
 export default function voting(state = initialState, action) {
@@ -83,8 +87,12 @@ export default function voting(state = initialState, action) {
       return { ...state, votingAuthorityAccount: action.payload };
     case 'SET_VOTING_AUTHORITY_GENESIS':
       return { ...state, votingAuthorityGenesis: action.payload };
-    case 'SET_DONATION_RECIPIENT':
-      return { ...state, donationRecipient: action.payload };
+    case 'SET_FETCHED_AT':
+      return { ...state, fetchedAt: action.payload };
+    case 'SET_TOTAL_NUMBER_OF_VOTING_ISSUES':
+      return { ...state, totalNumberOfVotingIssues: action.payload };
+    case 'SET_VOTES_FIELDSET_LEGEND':
+      return { ...state, votesFieldsetLegend: action.payload };
     default:
       return state;
   }
