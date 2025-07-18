@@ -231,35 +231,6 @@ function IssuePage() {
   }, [userGenesis]);
 
   React.useEffect(() => {
-    if (!userGenesis) return;
-
-    const checkTrust = async () => {
-      try {
-        const response = await apiCall('finance/list/trust/trust,stake', { name: 'trust' });
-        console.log('checkTrust response: ', response);
-        const trust = response?.[0]?.trust || 0;
-        const stake = response?.[0]?.stake || 0;
-        setUserTrust(trust);
-        setUserWeight(trust * stake);
-      } catch (e) {
-        showErrorDialog({ message: 'Failed to retrieve trust level', note: e.message });
-      }
-    };
-
-    const fetchVotesCastOverall = async () => {
-      if (!userGenesis || !senderAddress) return; // wait until both are available
-      const response = await proxyRequest(
-        `${BACKEND_BASE}/votes-cast/${userGenesis}?senderAddress=${encodeURIComponent(senderAddress)}&votingAuthorityGenesis=${votingAuthorityGenesis}`,
-        { method: 'GET' }
-      );
-      setUserVotesCastOverall(response.data.votesCast || 0);
-    };
-
-    checkTrust();
-    fetchVotesCastOverall();
-  }, [userGenesis, senderAddress]);
-
-  React.useEffect(() => {
     const debugValues = { userGenesis, userTrust, senderAddress, issue};
     console.log('Updating window.myModuleDebug:', debugValues);
     window.myModuleDebug = debugValues;
