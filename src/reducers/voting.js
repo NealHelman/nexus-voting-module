@@ -33,6 +33,8 @@ const initialState = {
   votingAuthorityAccount: '',
   votingAuthorityGenesis: '',
   donationRecipient: '',
+  namedAssetCost: 0,
+  namedAccountCost: 0,
   fetchedAt: null,
   totalNumberOfVotingIssues: 0,
   votesFieldsetLegend: 'Voting Issues (Filtered & Sorted) - Showing 0 of 0 Total Votes'
@@ -89,6 +91,10 @@ export default function voting(state = initialState, action) {
       return { ...state, votingAuthorityGenesis: action.payload };
     case 'SET_DONATION_RECIPIENT':
       return { ...state, donationRecipient: action.payload };
+    case 'SET_NAMED_ASSET_COST':
+      return { ...state, namedAssetCost: action.payload };
+    case 'SET_NAMED_ACCOUNT_COST':
+      return { ...state, namedAccountCost: action.payload };
     case 'SET_FETCHED_AT':
       return { ...state, fetchedAt: action.payload };
     case 'SET_TOTAL_NUMBER_OF_VOTING_ISSUES':

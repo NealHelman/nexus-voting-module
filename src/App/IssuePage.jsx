@@ -31,12 +31,16 @@ import {
   StyledDropdownWrapper, 
   StyledSelect,
   ModalButton,
-  Strong} from '../Styles/StyledComponents';
+  Strong,
+  StyledTextField,
+  StyledTextArea
+  } from '../Styles/StyledComponents';
 
 
 const { version } = nxsPackage;
 const BACKEND_BASE = 'http://65.20.79.65:4006';
 const CACHE_AGE_LIMIT = 5 * 60 * 1000; // 5 minutes
+const WEIGHT_SCALE_FACTOR = 1000000;
 const React = NEXUS.libraries.React;
 
 function base64ToUint8Array(base64) {
@@ -104,7 +108,8 @@ function IssuePage() {
     userWeight,
     senderAddress: votingSenderAddress,
     donationRecipient: votingDonationRecipient,
-    votingAuthoritySigchain
+    votingAuthoritySigchain,
+    weightedVoteCounts
   } = useSelector(state => state.voting);
 
   // Use the most appropriate values
@@ -114,6 +119,7 @@ function IssuePage() {
   // Flags and Miscellaneous
   const [isDonating, setIsDonating] = React.useState(false);
   const [donationAmount, setDonationAmount] = React.useState(0);
+  const [donationSent, setDonationSent] = React.useState(false);
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState('');
   const [docsContent, setDocsContent] = React.useState([]);
@@ -157,6 +163,7 @@ function IssuePage() {
   const setVotingAuthorityAccount = (value) => dispatch({ type: 'SET_VOTING_AUTHORITY_ACCOUNT', payload: value });
   const setVotingAuthorityGenesis = (value) => dispatch({ type: 'SET_VOTING_AUTHORITY_GENESIS', payload: value });
   const setDonationRecipient = (page) => dispatch({ type: 'SET_DONATION_RECIPIENT', payload: page });
+  const setWeightedVoteCounts = (page) => dispatch({ type: 'SET_WEIGHTED_VOTE_COUNTS', payload: page });
 
   const [searchParams] = useSearchParams();
   const issueIdFromParam = searchParams.get('edit');
@@ -274,7 +281,7 @@ function IssuePage() {
   // Fetch the voting issue metadata
   const fetchIssue = React.useCallback(
     async () => {
-      if (!issue) return;
+      if (issue) return;
       setLoading(true);
       setError('');
       try {
@@ -296,7 +303,7 @@ function IssuePage() {
       }
       setLoading(false);
     },
-  [currentIssue, issueId]);
+  [dispatch, currentIssue, issueId]);
   
   React.useEffect(() => {
     const canUserVote = async () => {
@@ -399,12 +406,18 @@ function IssuePage() {
   // Cast Vote //
   const handleVote = async (address) => {
     let txidString = '';
+    // Convert decimal weight to integer for the reference field
+    const scaledWeight = Math.floor(userWeight * WEIGHT_SCALE_FACTOR);
+    
+    console.log(`Original weight: ${userWeight}`);
+    console.log(`Scaled weight for reference: ${scaledWeight}`);
+
     try {
       const response = await secureApiCall('finance/debit/account', {
         from: senderAddress,
         to: address,
         amount: voteCost,
-        reference: userWeight
+        reference: scaledWeight
       })
       const result = response.data ?? response;
 
@@ -439,7 +452,7 @@ function IssuePage() {
       
      showSuccessDialog({ 
         message: 'Success!',
-        note: 'You voted!'
+        note: "You voted! Your vote won't be reflected until the voting transaction is confirmed on the network."
       });
       setOptionVotedOn(address);
       txidString = result.txid?.toString?.() ?? '';
@@ -764,6 +777,7 @@ function IssuePage() {
           </div>
         </div>
       </FieldSet>
+
       {/* Vote Buttons */}
       <FieldSet legend="CAST YOUR VOTE" style={{ marginBottom: '2em' }}>
         <div style={{ textAlign: 'center' }}>
@@ -777,35 +791,66 @@ function IssuePage() {
             <p>You have already cast a vote on this issue, and it is set to One Time Voting.</p>
           )}
           <ul style={{ display: "inline-block", textAlign: "center", padding: 0, margin: 0, listStyle: "none" }}>
-            {optionAddresses.map((address, idx) => (
-              <li key={address} style={{ position: "relative", margin: "0.5em 0" }}>
-                <div style={{ display: "inline-block", position: "relative" }}>
-                  <Button 
-                    key={address}
-                    skin="filled-primary"
-                    disabled={!userHasEnoughTrustToVote || votingOver || userIneligibleToVote} 
-                    onClick={() => handleVote(address)}
-                  >
-                    Vote for {issue.option_labels?.[idx] || `Option ${idx + 1}`}
-                  </Button>
-                  {/* Indicator if voted */}
-                  {optionVotedOn === address && (
-                    <span style={{
+            {optionAddresses.map((address, idx) => {
+              const label = issue.option_labels?.[idx] || `Option ${idx + 1}`;
+              
+              // Calculate weighted vote counts and percentages
+              const weightedCount = Number(weightedVoteCounts?.[issue.slug]?.[address] ?? 0);
+              const totalWeighted = optionAddresses
+                .map(addr => weightedVoteCounts?.[issue.slug]?.[addr] ?? 0)
+                .reduce((acc, count) => acc + Number(count), 0);
+              const percent = totalWeighted > 0 ? (weightedCount / totalWeighted) * 100 : 0;
+              const displayWeight = (weightedCount / WEIGHT_SCALE_FACTOR).toLocaleString(undefined, { maximumFractionDigits: 2 });
+              
+              return (
+                <li key={address} style={{ position: "relative", margin: "0.5em 0", display: "flex", justifyContent: "center" }}>
+                  <div style={{ position: "relative", width: "100%", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                    {/* Left side - Vote counts and percentage */}
+                    <div style={{
                       position: "absolute",
-                      left: "105%",
+                      right: "105%",
                       top: "50%",
                       transform: "translateY(-50%)",
-                      color: "green",
+                      color: "#00b7fa",
                       fontWeight: "bold",
-                      fontSize: "0.95em",
+                      fontSize: "0.9em",
                       whiteSpace: "nowrap",
+                      textAlign: "right"
                     }}>
-                      (You voted on this one)
-                    </span>
-                  )}
-                </div>
-              </li>
-            ))}
+                      <div>{displayWeight} weighted NXS</div>
+                      <div style={{ color: "#888", fontSize: "0.85em" }}>({percent.toFixed(2)}%)</div>
+                    </div>
+                    
+                    {/* Center - Vote button */}
+                    <Button 
+                      key={address}
+                      skin="filled-primary"
+                      disabled={!userHasEnoughTrustToVote || votingOver || userIneligibleToVote} 
+                      onClick={() => handleVote(address)}
+                      style={{ width: "100%", minWidth: "300px" }}
+                    >
+                      Vote for {label}
+                    </Button>
+                    
+                    {/* Right side - "You voted" indicator */}
+                    {optionVotedOn === address && (
+                      <span style={{
+                        position: "absolute",
+                        left: "105%",
+                        top: "50%",
+                        transform: "translateY(-50%)",
+                        color: "green",
+                        fontWeight: "bold",
+                        fontSize: "0.95em",
+                        whiteSpace: "nowrap",
+                      }}>
+                        (You voted on this one)
+                      </span>
+                    )}
+                  </div>
+                </li>
+              );
+            })}
           </ul>
         </div>
       </FieldSet>
@@ -837,7 +882,7 @@ function IssuePage() {
         <Modal id="DonationDialog" escToClose={true} removeModal={() => setIsDonating(false)} style={{ width: '500px' }}>
           <Modal.Header>Thank you!<br />How many NXS<br />do you wish to donate?</Modal.Header>
           <Modal.Body>
-            <TextField label="DonationAmount" value={donationAmount} onChange={(e) => setDonationAmount(e.target.value)} />
+            <StyledTextField label="DonationAmount" value={donationAmount} onChange={(e) => setDonationAmount(e.target.value)} />
           </Modal.Body>
           <ModalFooterBar>
             <Button skin="filled-primary" onClick={handleDonation} disabled={!donationAmount}>Donate</Button>

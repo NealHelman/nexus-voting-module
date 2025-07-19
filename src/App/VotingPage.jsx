@@ -34,7 +34,10 @@ import {
   StyledDropdownWrapper, 
   StyledSelect,
   ModalButton,
-  Strong} from '../Styles/StyledComponents';
+  Strong,
+  StyledTextField,
+  StyledTextArea
+  } from '../Styles/StyledComponents';
 
 const { version } = nxsPackage;
 const BACKEND_BASE = 'http://65.20.79.65:4006';
@@ -89,6 +92,8 @@ function VotingPageComponent() {
     votingAuthorityAccount,
     votingAuthorityGenesis,
     donationRecipient,
+    namedAssetCost,
+    namedAccountCost,
     fetchedAt,
     totalNumberOfVotingIssues,
     votesFieldsetLegend
@@ -157,6 +162,8 @@ function VotingPageComponent() {
   const setVotingAuthorityAccount = (page) => dispatch({ type: 'SET_VOTING_AUTHORITY_ACCOUNT', payload: page });
   const setVotingAuthorityGenesis = (page) => dispatch({ type: 'SET_VOTING_AUTHORITY_GENESIS', payload: page });
   const setDonationRecipient = (page) => dispatch({ type: 'SET_DONATION_RECIPIENT', payload: page });
+  const setNamedAssetCost = (page) => dispatch({ type: 'SET_NAMED_ASSET_COST', payload: page });
+  const setNamedAccountCost = (page) => dispatch({ type: 'SET_NAMED_ACCOUNT_COST', payload: page });
   
   function calculateDefaultDeadline() {
     const now = new Date();
@@ -206,16 +213,28 @@ function VotingPageComponent() {
       let walletVotingAuthorityAccount = votingAuthorityAccount;
       let walletVotingAuthorityGenesis = votingAuthorityGenesis;
       let walletDonationRecipient = donationRecipient;
-      if (!votingAuthoritySigchain || !votingAuthorityGenesis) {
+      let walletNamedAssetCost = namedAssetCost;
+      let walletNamedAccountCost = namedAccountCost;
+      if (!votingAuthoritySigchain || 
+          !votingAuthorityAccount ||
+          !votingAuthorityGenesis ||
+          !donationRecipient ||
+          !namedAssetCost ||
+          !namedAccountCost
+          ) {
         const { data } = await nexusVotingService.getProtectedValues();
         walletVotingAuthoritySigchain = data.VOTING_AUTHORITY_SIGCHAIN;
         walletVotingAuthorityAccount = data.VOTING_AUTHORITY_ACCOUNT;
         walletVotingAuthorityGenesis = data.VOTING_AUTHORITY_GENESIS;
         walletDonationRecipient = data.DONATION_RECIPIENT;
+        walletNamedAssetCost = data.NAMED_ASSET_COST;
+        walletNamedAccountCost = data.NAMED_ACCOUNT_COST;
         setVotingAuthoritySigchain(walletVotingAuthoritySigchain);
         setVotingAuthorityAccount(walletVotingAuthorityAccount);
         setVotingAuthorityGenesis(walletVotingAuthorityGenesis);
         setDonationRecipient(walletDonationRecipient);
+        setNamedAssetCost(walletNamedAssetCost);
+        setNamedAccountCost(walletNamedAccountCost);
       }
       if (cancelled) return;
       
@@ -468,6 +487,8 @@ function VotingPageComponent() {
       minTrust,
       subscribed,
       senderAddress,
+      namedAccountCost,
+      namedAssetCost,
       weightedVoteCounts,
       voteList,
       votingAuthorityGenesis,
@@ -487,6 +508,8 @@ function VotingPageComponent() {
     minTrust,
     subscribed,
     senderAddress,
+    namedAccountCost,
+    namedAssetCost,
     weightedVoteCounts,
     voteList,
     votingAuthorityGenesis,
@@ -570,6 +593,7 @@ function VotingPageComponent() {
       return false;
     }
   }
+  
   const resetDonationModal = () => {
     setDonationAmount(0);
     setIsDonating(false);
