@@ -4,7 +4,35 @@ import { decompressFromBase64 } from 'lz-string';
 import MarkdownWithZoom from "./MarkdownWithZoom";
 import nexusVotingService from '../services/nexusVotingService';
 import { Copyright } from '../utils/copyright.js';
-import nxsPackage from '../../nxs_package.json' with { type: "json" };
+import nxsPackage from '../../nxs_package.json';
+
+import {
+  IconButtonBar,
+  CenteredColumn,
+  HorizontalFilterBar,
+  HorizontalButtonBar,
+  ModalFooterBar,
+  StatBar,
+  VoteFieldSetWrapper,
+  StyledLabel,
+  VoteList,
+  VoteItem,
+  VoteItemContainer,
+  VoteItemTitle,
+  VoteItemDetails,
+  VoteItemButtonColumn,
+  OptionList,
+  OptionItem,
+  StyledGridFooter,
+  VersionLeft,
+  DonateCenter,
+  StyledModalBody,
+  LoadingText,
+  StyledDropdownWrapper, 
+  StyledSelect,
+  ModalButton,
+  Strong} from '../Styles/StyledComponents';
+
 
 const { version } = nxsPackage;
 const BACKEND_BASE = 'http://65.20.79.65:4006';
@@ -22,7 +50,8 @@ function base64ToUint8Array(base64) {
 }
 
 function IssuePage() {
-  const rehydrated = useSelector(state => state._persist?.rehydrated);
+  const dispatch = useDispatch();
+  const navigate = useNavigate();
   const { currentIssue } = useSelector(state => state.issue);
   const issue = currentIssue?.data;
   console.log('[IssuePage::issue: ', issue);
@@ -58,22 +87,29 @@ function IssuePage() {
   creatorGenesis,
   jsonGuid,
   analysisGuid,
-  senderAddress,
   userTrust,
-  userWeight,
   userHasEnoughTrustToVote,
   userIneligibleToVote,
   userCurrentlyVotedOn,
   userVotesCastOverall,
   votingOver,
   optionVotedOn,
-  votingAuthoritySigchain,
   votingAuthorityAccount,
-  votingAuthorityGenesis,
-  donationRecipient
+  votingAuthorityGenesis
 } = useSelector(state => state.issue);
 
-  const dispatch = useDispatch();
+  // Get values from the voting slice
+  const {
+    genesis,
+    userWeight,
+    senderAddress: votingSenderAddress,
+    donationRecipient: votingDonationRecipient,
+    votingAuthoritySigchain
+  } = useSelector(state => state.voting);
+
+  // Use the most appropriate values
+  const senderAddress = votingSenderAddress || issueSenderAddress;
+  const donationRecipient = votingDonationRecipient || issueDonationRecipient;
 
   // Flags and Miscellaneous
   const [isDonating, setIsDonating] = React.useState(false);
@@ -122,7 +158,6 @@ function IssuePage() {
   const setVotingAuthorityGenesis = (value) => dispatch({ type: 'SET_VOTING_AUTHORITY_GENESIS', payload: value });
   const setDonationRecipient = (page) => dispatch({ type: 'SET_DONATION_RECIPIENT', payload: page });
 
-  const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const issueIdFromParam = searchParams.get('edit');
 
@@ -172,7 +207,7 @@ function IssuePage() {
 
   // ---------- SET FORM MODE PROPERLY FOR BOTH ENTRY PATHS ----------
   React.useEffect(() => {
-    if (!rehydrated || !issueId) return;
+    if (!issueId) return;
 
     if (
       issueCacheEntry  &&
@@ -189,7 +224,7 @@ function IssuePage() {
         dispatch({ type: 'SET_ISSUE_FETCHED', payload: true });
       });
     }
-  }, [rehydrated, issueId, issueCacheEntry]);
+  }, [issueId, issueCacheEntry]);
 
   React.useEffect(() => {
     nexusVotingService.getProtectedValues().then(({ data }) => {
@@ -212,7 +247,7 @@ function IssuePage() {
       }
     };
     getGenesis();
-  }, [dispatch, rehydrated]);
+  }, [dispatch]);
   
   React.useEffect(() => {
     if (!userGenesis) return;
@@ -491,217 +526,246 @@ function IssuePage() {
 
   return (
     <Panel title={panelTitle} icon={{ url: 'voting.svg', id: 'icon' }}>
-      <FieldSet legend='Your Voting Power' style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1rem' }}>
-        <div style={{ display: 'flex', gap: '1rem', marginBottom: '1rem', marginTop: '1rem' }}>
-          <p>
-            Your Trust Score: {(userTrust ?? 0).toLocaleString()} |{' '}
-            Your Voting Weight: {(Number(userWeight) / 1e8).toLocaleString(undefined, { maximumFractionDigits: 2 })} |{' '}
-            Total Number of Votes You've Cast: 
+      {/* Voting Power */}
+      <FieldSet legend="YOUR VOTING POWER" style={{ marginBottom: '2em', textAlign: 'center' }}>
+        <div>
+          Your Trust Score: <strong>{(userTrust ?? 0).toLocaleString()} | </strong>
+          Your Voting Weight: <strong>{(Number(userWeight).toLocaleString(undefined, { maximumFractionDigits: 6 }))} | </strong>
+          Total Number of Votes You've Cast: <strong>
             {!userVotesCastOverall && userVotesCastOverall != 0 ? (
-              <> <span style={{ color: 'red' }}>(loading...)</span></>
+              <span style={{ color: 'red' }}>(loading...)</span>
             ) : (
-              <> {userVotesCastOverall.toLocaleString()} </>
+              userVotesCastOverall.toLocaleString()
             )}
-          </p>
+          </strong>
         </div>
       </FieldSet>
 
-      <div style={{ marginBottom: '1em' }}>
-        <div style={{ marginBottom: '2rem', textAlign: 'center', fontSize: 'x-large' }}>
-          <p>
-            <strong>{issue.title}</strong>
-            <br />
-            Voting is
-            {!votingOver ? (
-              <> still <span style={{ color: 'green' }}>OPEN</span>!</>
-            ) : (
-              <> <span style={{ color: 'red' }}>CLOSED</span>!</>
-            )}
-          </p>
+      {/* Issue Title and Status */}
+      <FieldSet legend="" style={{ marginBottom: '2em', textAlign: 'center', fontSize: 'x-large' }}>
+        <div>
+          <strong style={{ color: '#00b7fa' }}>{issue.title}</strong>
+          <br />
+          Voting is
+          {!votingOver ? (
+            <> still <span style={{ color: 'green' }}>OPEN</span>!</>
+          ) : (
+            <> <span style={{ color: 'red' }}>CLOSED</span>!</>
+          )}
         </div>
-        <div style={{ marginBottom: '3rem' }}>
-          <label htmlFor="descriptionTextField" style={{ marginBottom: '0.25rem' }}>Description</label>
+      </FieldSet>
+
+      {/* Issue Details */}
+      <FieldSet legend="ISSUE DETAILS" style={{ marginBottom: '2em' }}>
+        <div style={{ marginBottom: '2rem' }}>
+          <label htmlFor="descriptionTextField" style={{ marginBottom: '0.25rem', display: 'block' }}>Description</label>
           <MultilineTextField label="Description" value={issue.description} disabled />
         </div>
-      </div>
-      <div>
-        <strong>Created:</strong> {issue.created_at ? new Date(issue.created_at * 1000).toLocaleString() : 'N/A'}
-      </div>
-      <div>
-        <strong>Deadline:</strong> {issue.deadline ? new Date(issue.deadline * 1000).toLocaleString() : 'N/A'}
-      </div>
-      <div>
-        <strong>Organizer:</strong> {issue.organizer_name || 'Anonymous'}
-      </div>
-      <div>
-        <strong>Organizer's Email:</strong> {issue.organizer_email || 'Anonymous'}
-      </div>
-      <div>
-        <strong>Organizer's Telegram:</strong> {issue.organizer_telegram || ''}
-      </div>
-      <div>
-        <strong>Hashtag:</strong> {issue.hashtag || ''}
-      </div>
-      <div>
-        <strong>Minimum Trust Required to Vote:</strong> {Number(issue.min_trust).toLocaleString()}
-      </div>
-      <div style={{ marginTop: '3rem' }}>
-          <label htmlFor="summaryProArgumentsTextField" style={{ marginBottom: '0.25rem' }}>Summary - Pro Arguments</label>
+        
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1em', marginBottom: '1em' }}>
+          <div>
+            <strong>Created:</strong> {issue.created_at ? new Date(issue.created_at * 1000).toLocaleString() : 'N/A'}
+          </div>
+          <div>
+            <strong>Deadline:</strong> {issue.deadline ? new Date(issue.deadline * 1000).toLocaleString() : 'N/A'}
+          </div>
+          <div>
+            <strong>Organizer:</strong> {issue.organizer_name || 'Anonymous'}
+          </div>
+          <div>
+            <strong>Organizer's Email:</strong> {issue.organizer_email || 'Anonymous'}
+          </div>
+          <div>
+            <strong>Organizer's Telegram:</strong> {issue.organizer_telegram || ''}
+          </div>
+          <div>
+            <strong>Hashtag:</strong> {issue.hashtag || ''}
+          </div>
+        </div>
+        
+        <div style={{ marginBottom: '2rem' }}>
+          <strong>Minimum Trust Required to Vote:</strong> {Number(issue.min_trust).toLocaleString()}
+        </div>
+
+        <div style={{ marginBottom: '2rem' }}>
+          <label htmlFor="summaryProArgumentsTextField" style={{ marginBottom: '0.25rem', display: 'block' }}>Summary - Pro Arguments</label>
           <MultilineTextField label="Summary - Pro Arguments" value={issue.summary_pro} disabled />
-          <label htmlFor="summaryConArgumentsTextField" style={{ marginBottom: '0.25rem' }}>Summary - Con Arguments</label>
+        </div>
+        
+        <div style={{ marginBottom: '2rem' }}>
+          <label htmlFor="summaryConArgumentsTextField" style={{ marginBottom: '0.25rem', display: 'block' }}>Summary - Con Arguments</label>
           <MultilineTextField label="Summary - Con Arguments" value={issue.summary_con} disabled />
-          <label htmlFor="possibleOutcomesTextField" style={{ marginBottom: '0.25rem' }}>Possible Outcomes</label>
+        </div>
+        
+        <div style={{ marginBottom: '2rem' }}>
+          <label htmlFor="possibleOutcomesTextField" style={{ marginBottom: '0.25rem', display: 'block' }}>Possible Outcomes</label>
           <MultilineTextField label="Possible Outcomes" value={issue.possible_outcomes} disabled />
-      </div>
-      {/* --- SUPPORTING DOCUMENTS --- */}
-    {issue.supporting_docs?.length > 0 && (
-      <FieldSet legend="Supporting Documents">
-        <div style={{ textAlign: 'center' }}>
-          Click on the document title to toggle display of the document<br />(Viewer for text or markdown files, download all others.)
         </div>
-        <ul style={{ width: '100%', padding: 0, margin: 0, listStyle: 'none' }}>
-          {issue.supporting_docs.map(doc => {
-            const docData = docsContent[doc.guid];
-            if (!docData) return <li key={doc.guid}>Loading document...</li>;
-            if (docData.error) return <li key={doc.guid} style={{ color: 'red' }}>{docData.error}</li>;
-            const isOpen = !!openDocs[doc.guid];
-            return (
-              <li key={doc.guid} style={{ width: '100%', boxSizing: 'border-box', marginBottom: '2em' }}>
-                <div
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    gap: '1em',
-                    width: '100%',
-                  }}
-                >
-                {console.log('IssuePage::docData: ', docData)}
-                {(docData.type == 'markdown' || docData.type === 'text') && (
-                  <strong
-                    style={{ cursor: 'pointer', color: '#00b7fa' }}
-                    onClick={() => toggleDoc(doc.guid)}
-                  >
-                    {docData.name}
-                  </strong>
-                )}
-                {(docData.type !== 'markdown' && docData.type !== 'text') && (
-                  <strong>
-                    {docData.name}
-                  </strong>
-                )}
-                  <Button
-                    onClick={() => handleDownload(docData.name, docData.base64)}
-                    style={{ marginLeft: 'auto', whiteSpace: 'nowrap' }}
-                  >
-                    Download
-                  </Button>
-                </div>
-                {isOpen && (
-                  <>
-                    {docData.type === 'markdown' && (
-                      <div className="document-display" style={{ fontFamily: 'Times New Roman, Times, serif' }}>
-                        <MarkdownWithZoom>
-                          {docData.content}
-                        </MarkdownWithZoom>
-                      </div>
-                    )}
-                    {docData.type === 'text' && (
-                      <div className='document-display'>
-                        <pre>{docData.content}</pre>
-                      </div>
-                    )}
-                    {docData.type === 'unknown' && (
-                      <pre>{docData.content}</pre>
-                    )}
-                  </>
-                )}
-              </li>
-            );
-          })}
-        </ul>
       </FieldSet>
-    )}
-    {/* --- ON-CHAIN ADDRESSES --- */}
-    <FieldSet legend="ON-CHAIN ADDRESSES">
-      <div style={{
-        display: 'flex',
-        justifyContent: 'center',
-        width: '100%'
-      }}>
+
+      {/* Supporting Documents */}
+      {issue.supporting_docs?.length > 0 && (
+        <FieldSet legend="SUPPORTING DOCUMENTS" style={{ marginBottom: '2em' }}>
+          <div style={{ textAlign: 'center', marginBottom: '1em' }}>
+            Click on the document title to toggle display of the document<br />(Viewer for text or markdown files, download all others.)
+          </div>
+          <ul style={{ width: '100%', padding: 0, margin: 0, listStyle: 'none' }}>
+            {issue.supporting_docs.map(doc => {
+              const docData = docsContent[doc.guid];
+              if (!docData) return <li key={doc.guid}>Loading document...</li>;
+              if (docData.error) return <li key={doc.guid} style={{ color: 'red' }}>{docData.error}</li>;
+              const isOpen = !!openDocs[doc.guid];
+              return (
+                <li key={doc.guid} style={{ width: '100%', boxSizing: 'border-box', marginBottom: '2em' }}>
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      gap: '1em',
+                      width: '100%',
+                    }}
+                  >
+                    {console.log('IssuePage::docData: ', docData)}
+                    {(docData.type == 'markdown' || docData.type === 'text') && (
+                      <strong
+                        style={{ cursor: 'pointer', color: '#00b7fa' }}
+                        onClick={() => toggleDoc(doc.guid)}
+                      >
+                        {docData.name}
+                      </strong>
+                    )}
+                    {(docData.type !== 'markdown' && docData.type !== 'text') && (
+                      <strong>
+                        {docData.name}
+                      </strong>
+                    )}
+                    <Button
+                      skin="filled-primary"
+                      onClick={() => handleDownload(docData.name, docData.base64)}
+                      style={{ marginLeft: 'auto', whiteSpace: 'nowrap' }}
+                    >
+                      Download
+                    </Button>
+                  </div>
+                  {isOpen && (
+                    <>
+                      {docData.type === 'markdown' && (
+                        <div className="document-display" style={{ fontFamily: 'Times New Roman, Times, serif' }}>
+                          <MarkdownWithZoom>
+                            {docData.content}
+                          </MarkdownWithZoom>
+                        </div>
+                      )}
+                      {docData.type === 'text' && (
+                        <div className='document-display'>
+                          <pre>{docData.content}</pre>
+                        </div>
+                      )}
+                      {docData.type === 'unknown' && (
+                        <pre>{docData.content}</pre>
+                      )}
+                    </>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        </FieldSet>
+      )}
+
+      {/* On-Chain Addresses */}
+      <FieldSet legend="ON-CHAIN ADDRESSES" style={{ marginBottom: '2em' }}>
         <div style={{
-          textAlign: 'left',
-          width: '100%',
-          maxWidth: 960
+          display: 'flex',
+          justifyContent: 'center',
+          width: '100%'
         }}>
-            <div>
-              <strong>Voting Issue Account Name:</strong>
-              <Tooltip.Trigger tooltip="Click to copy to clipboard">
-                <span
-                  onClick={() => copyToClipboard(`${votingAuthoritySigchain}:${issue.slug}`)}
-                  style={{ cursor: 'pointer', color: '#00b7fa', marginLeft: 6 }}
-                >
-                  {votingAuthoritySigchain}:{issue.slug}
-                </span>
-              </Tooltip.Trigger>
+          <div style={{
+            width: '100%',
+            maxWidth: 960
+          }}>
+            <div style={{ 
+              display: 'grid', 
+              gridTemplateColumns: 'auto 1fr', 
+              gap: '0.5em 1em',
+              alignItems: 'center'
+            }}>
+              {/* Voting Issue Account Name */}
+              <div style={{ textAlign: 'right' }}>
+                <strong>Voting Issue Account Name:</strong>
+              </div>
+              <div style={{ textAlign: 'left' }}>
+                <Tooltip.Trigger tooltip="Click to copy to clipboard">
+                  <span
+                    onClick={() => copyToClipboard(`${votingAuthoritySigchain}:${issue.slug}`)}
+                    style={{ cursor: 'pointer', color: '#00b7fa' }}
+                  >
+                    {votingAuthoritySigchain}:{issue.slug}
+                  </span>
+                </Tooltip.Trigger>
+              </div>
+
+              {/* Voting Issue Account Address */}
+              <div style={{ textAlign: 'right' }}>
+                <strong>Voting Issue Account Address:</strong>
+              </div>
+              <div style={{ textAlign: 'left' }}>
+                <Tooltip.Trigger tooltip="Click to copy to clipboard">
+                  <span
+                    onClick={() => copyToClipboard(issue.address)}
+                    style={{ cursor: 'pointer', color: '#00b7fa' }}
+                  >
+                    {issue.address}
+                  </span>
+                </Tooltip.Trigger>
+              </div>
+
+              {/* Voting Options */}
+              {issue.account_addresses && issue.account_addresses.map((opt, idx) => {
+                const label = issue.option_labels?.[idx] || `Option ${idx + 1}`;
+                const name = opt.name || '';
+                const address = opt.address || opt;
+                return (
+                  <React.Fragment key={address}>
+                    {/* Option Account Name */}
+                    <div style={{ textAlign: 'right' }}>
+                      <strong>{label} - Voting Option Account Name:</strong>
+                    </div>
+                    <div style={{ textAlign: 'left' }}>
+                      <Tooltip.Trigger tooltip="Click to copy to clipboard">
+                        <span
+                          onClick={() => copyToClipboard(`${votingAuthoritySigchain}:${name}`)}
+                          style={{ cursor: 'pointer', color: '#00b7fa' }}
+                        >
+                          {votingAuthoritySigchain}:{name}
+                        </span>
+                      </Tooltip.Trigger>
+                    </div>
+
+                    {/* Option Account Address */}
+                    <div style={{ textAlign: 'right' }}>
+                      <strong>Voting Option Account Address:</strong>
+                    </div>
+                    <div style={{ textAlign: 'left' }}>
+                      <Tooltip.Trigger tooltip="Click to copy to clipboard">
+                        <span
+                          onClick={() => copyToClipboard(opt.address)}
+                          style={{ cursor: 'pointer', color: '#00b7fa' }}
+                        >
+                          {opt.address}
+                        </span>
+                      </Tooltip.Trigger>
+                    </div>
+                  </React.Fragment>
+                );
+              })}
             </div>
-
-            <div style={{ marginBottom: '0.25rem' }}>
-              <strong>Voting Issue Account Address:</strong>
-              <Tooltip.Trigger tooltip="Click to copy to clipboard">
-                <span
-                  onClick={() => copyToClipboard(issue.address)}
-                  style={{ cursor: 'pointer', color: '#00b7fa', marginLeft: 6 }}
-                >
-                  {issue.address}
-                </span>
-              </Tooltip.Trigger>
-            </div>
-
-            {issue.account_addresses && (
-              <ul style={{ fontSize: '0.9rem' }}>
-                {(() => {
-                  return issue.account_addresses.map((opt, idx) => {
-                    // Use the object's properties
-                    const label = issue.option_labels?.[idx] || `Option ${idx + 1}`;
-                    const name = opt.name || ''; // The option's name (e.g., "opt-yes-dc9d9622")
-                    const address = opt.address || opt; // Support both object and string, just in case
-                    return (
-                      <li key={address}>
-                        <div>
-                          <strong>{label} - Voting Option Account Name:</strong>
-                          <Tooltip.Trigger tooltip="Click to copy to clipboard">
-                            <span
-                              onClick={() => copyToClipboard(`${votingAuthoritySigchain}:${name}`)}
-                              style={{ cursor: 'pointer', color: '#00b7fa', marginLeft: 6 }}
-                            >
-                              {votingAuthoritySigchain}:{name}
-                            </span>
-                          </Tooltip.Trigger>
-                        </div>
-
-                        <div style={{ marginBottom: '0.25rem' }}>
-                          <strong><span style={{ color: 'transparent' }}>{label} - </span>Voting Option Account Address:</strong>
-                          <Tooltip.Trigger tooltip="Click to copy to clipboard">
-                            <span
-                              onClick={() => copyToClipboard(issue.address)}
-                              style={{ cursor: 'pointer', color: '#00b7fa', marginLeft: 6 }}
-                            >
-                              {opt.address}
-                            </span>
-                          </Tooltip.Trigger>
-                        </div>
-                      </li>
-                    );
-                  });
-                })()}
-              </ul>
-            )}
+          </div>
         </div>
-      </div>
-    </FieldSet>
-    {/* --- VOTE BUTTONS --- */}
-      <FieldSet legend="CAST YOUR VOTE">
+      </FieldSet>
+      {/* Vote Buttons */}
+      <FieldSet legend="CAST YOUR VOTE" style={{ marginBottom: '2em' }}>
         <div style={{ textAlign: 'center' }}>
           {!userHasEnoughTrustToVote && (
             <p>You have insufficient trust to vote on this issue.<br />A trust score of {Number(issue.min_trust).toLocaleString()} is required.<br />Yours is currently {Number(userTrust).toLocaleString()}.</p>
@@ -718,6 +782,7 @@ function IssuePage() {
                 <div style={{ display: "inline-block", position: "relative" }}>
                   <Button 
                     key={address}
+                    skin="filled-primary"
                     disabled={!userHasEnoughTrustToVote || votingOver || userIneligibleToVote} 
                     onClick={() => handleVote(address)}
                   >
@@ -744,51 +809,40 @@ function IssuePage() {
           </ul>
         </div>
       </FieldSet>
-      <div style={{ textAlign: 'center' }}>
-        <Button>
-          <Link onClick={handleReturnToVotingPageClick} style={{ textDecoration: 'none', color: 'inherit' }}>
-            Return to Voting Issue List Page
-          </Link>
+
+      {/* Return Button */}
+      <div style={{ textAlign: 'center', marginBottom: '2em' }}>
+        <Button skin="filled-primary" onClick={handleReturnToVotingPageClick}>
+          Return to Voting Issue List Page
         </Button>
       </div>
+
+      {/* Footer */}
       <div style={{
         display: 'grid',
         gridTemplateColumns: '1fr auto 1fr',
         alignItems: 'center',
-        fontSize: 'small'
+        fontSize: 'small',
+        marginTop: '2em'
       }}>
-        <div>
-          {/* Left-justified content here */}
-          version {version}
-        </div>
+        <div style={{ justifySelf: 'start' }}>version {version}</div>
         <div style={{ justifySelf: 'center' }}>
-          <Button onClick={() => setIsDonating(true)}>
-            Donate
-          </Button>
+          <Button skin="filled-primary" onClick={() => setIsDonating(true)}>Donate</Button>
         </div>
         <Copyright />
       </div>
+
+      {/* Donation Modal */}
       {isDonating && (
-        <Modal 
-          id="DonationDialog" 
-          escToClose={true}
-          removeModal={ () => setIsDonating(false)}
-          style={{ width: '500px' }}
-        >
+        <Modal id="DonationDialog" escToClose={true} removeModal={() => setIsDonating(false)} style={{ width: '500px' }}>
           <Modal.Header>Thank you!<br />How many NXS<br />do you wish to donate?</Modal.Header>
           <Modal.Body>
-            <TextField label="DonationAmount" value={donationAmount} onChange={(e) => setDonationAmount(e.target.value)} style={{ color: 'white' }}/>
+            <TextField label="DonationAmount" value={donationAmount} onChange={(e) => setDonationAmount(e.target.value)} />
           </Modal.Body>
-          <Modal.Footer>
-            <div class="Modal__Footer">
-              <Button onClick={handleDonation} disabled={!donationAmount} style={{ marginRight: '1rem' }}>
-                Donate
-              </Button>
-              <Button onClick={resetDonationModal}>
-                Cancel
-              </Button>
-            </div>
-          </Modal.Footer>
+          <ModalFooterBar>
+            <Button skin="filled-primary" onClick={handleDonation} disabled={!donationAmount}>Donate</Button>
+            <Button skin="filled" onClick={resetDonationModal}>Cancel</Button>
+          </ModalFooterBar>
         </Modal>
       )}
     </Panel>

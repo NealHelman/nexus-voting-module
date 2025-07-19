@@ -87,6 +87,8 @@ export default function voting(state = initialState, action) {
       return { ...state, votingAuthorityAccount: action.payload };
     case 'SET_VOTING_AUTHORITY_GENESIS':
       return { ...state, votingAuthorityGenesis: action.payload };
+    case 'SET_DONATION_RECIPIENT':
+      return { ...state, donationRecipient: action.payload };
     case 'SET_FETCHED_AT':
       return { ...state, fetchedAt: action.payload };
     case 'SET_TOTAL_NUMBER_OF_VOTING_ISSUES':

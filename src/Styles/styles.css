@@ -1,4 +1,5 @@
 // --- Styles: styles.css ---
+/*
 .nxs-box {
   background: #1e1e1e;
   padding: 1rem;
@@ -21,6 +22,7 @@
   margin-left: 1.5rem;
 }
 
+*/
 input, textarea, select {
   background-color: #121212;
   color: #e0e0e0;
@@ -31,6 +33,7 @@ input, textarea, select {
   width: 100%;
   font-size: 1rem;
 }
+/*
 
 button {
   background-color: #294EFF;
@@ -46,6 +49,7 @@ button {
 button:hover {
   background-color: #3a60ff;
 }
+*/
 
 .spinner {
   border: 4px solid rgba(0,0,0,0.1);

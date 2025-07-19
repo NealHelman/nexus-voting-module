@@ -8,6 +8,7 @@ import ui from './ui';
 import voting from './voting';
 import admin from './admin';
 import issue from './issue';
+import userGuide from './userGuide';
 
 export default function createReducer() {
   return function (state, action) {
@@ -15,6 +16,7 @@ export default function createReducer() {
       voting,
       admin,
       issue,
+      userGuide,
       settings,
       ui,
       nexus: walletDataReducer,
