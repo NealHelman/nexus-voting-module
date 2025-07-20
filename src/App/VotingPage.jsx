@@ -364,6 +364,7 @@ function VotingPageComponent() {
         );
         const rawVotes = response.data?.objects || [];
         const pageCount = Math.ceil((response.data?.total || 1) / votesPerPage);
+        setTotalNumberOfVotingIssues(response.data?.total || 0);
         dispatch({ type: 'SET_TOTAL_PAGES', payload: pageCount });
 
         const counts = {};
@@ -541,6 +542,16 @@ function VotingPageComponent() {
     dispatch({ type: 'SET_FETCHED_AT', payload: null });
     dispatch({ type: 'SET_VOTE_LIST_FETCHED', payload: false });
   };
+  
+  const handleSwitchPage = (e) => {
+    setCurrentPage(e);
+
+    let el = null;
+    setTimeout(() => {
+      el = document.getElementById('top');
+      if (el) el.scrollIntoView({ behavior: 'smooth' });
+    }, 100); // slight delay to ensure render
+  };
 
   const resetEmailModal = async () => {
     setEmailVisible(false);
@@ -667,6 +678,7 @@ function VotingPageComponent() {
       handleStartSearch={handleStartSearch}
       openSearchModal={openSearchModal}
       closeSearchModal={closeSearchModal}      
+      handleSwitchPage={handleSwitchPage}
     />
   );
 }

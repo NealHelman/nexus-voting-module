@@ -59,15 +59,18 @@ function VotingPageStyled({
   version,
   handleStartSearch,
   openSearchModal,
-  closeSearchModal
+  closeSearchModal,
+  handleSwitchPage
 }) {
   const navigate = useNavigate();
 
+  const showBusyIndicator = status === "loading" && voteList.length > 0;
+  
   return (
     <Panel title="Nexus Community On-Chain Voting - Issues Available" icon={{ url: 'voting.svg', id: 'icon' }}>
       {/* Filter & Actions */}
       <FieldSet legend="" style={{ position: 'relative', padding: '2em 1em 1em 1em', marginBottom: '2em' }}>
-        <div style={{ position: 'absolute', top: '1em', right: '1em', display: 'flex', gap: '1em' }}>
+        <div id='top' style={{ position: 'absolute', top: '1em', right: '1em', display: 'flex', gap: '1em' }}>
           <Tooltip.Trigger tooltip="Search for a Title">
             <Button skin="plain-link-primary" onClick={openSearchModal}>
               <img src='binoculars.svg' height='32px' />
@@ -156,88 +159,108 @@ function VotingPageStyled({
       </FieldSet>
 
       {/* Voting Issue List */}
-      <FieldSet legend={votesFieldsetLegend} style={{ marginBottom: '2em' }}>
-        {status === "loading" ? (
-          <div style={{ textAlign: 'center' }}>
-            <span style={{ color: 'red' }}>Loading...</span>
-          </div>
-        ) : status === "searching" ? (
-          <div style={{ textAlign: 'center' }}>
-            <span style={{ color: 'red' }}>Searching...</span>
-          </div>
-        ) : (
-          voteList.length === 0 ? (
-            <p style={{ textAlign: 'center' }}>No voting issues to display for this filter.</p>
+      <div style={{ position: 'relative' }}>
+        <FieldSet legend={votesFieldsetLegend} style={{ marginBottom: '2em' }}>
+          {/* Busy Indicator - positioned relative to the wrapper div */}
+          {showBusyIndicator && (
+            <div 
+              style={{
+                position: 'absolute',
+                top: '0px',
+                left: '0px',
+                right: '0px',
+                height: '3px',
+                background: 'linear-gradient(90deg, #00b7fa 0%, #00ff8f 50%, #00b7fa 100%)',
+                backgroundSize: '200% 100%',
+                animation: 'busySlide 1.5s ease-in-out infinite',
+                borderRadius: '3px 3px 0 0',
+                zIndex: 1000
+              }}
+            />
+          )}
+          
+          {status === "loading"  && voteList.length == 0 ? (
+            <div style={{ textAlign: 'center' }}>
+              <span style={{ color: 'red' }}>Loading...</span>
+            </div>
+          ) : status === "searching" ? (
+            <div style={{ textAlign: 'center' }}>
+              <span style={{ color: 'red' }}>Searching...</span>
+            </div>
           ) : (
-            voteList.map(vote => (
-              <FieldSet
-                key={vote.address}
-                legend={<React.Fragment><span>Title: </span><span style={{ color: 'rgb(0, 183, 250)' }}>{vote.title}</span></React.Fragment>}
-                style={{
-                  marginBottom: '2em',
-                  borderLeft: '4px solid #00b7fa',
-                  background: '#282a30',
-                  boxShadow: '0 2px 12px #0002',
-                  borderRadius: '10px',
-                  padding: '1.5em',
-                }}
-              >
-                <div style={{ fontSize: '0.98em', marginBottom: '0.7em' }}>
-                  <div>
-                    Hashtag: <span style={{ color: '#00ff8f', fontWeight: 'bold' }}>{vote.hashtag}</span>
+            voteList.length === 0 ? (
+              <p style={{ textAlign: 'center' }}>No voting issues to display for this filter.</p>
+            ) : (
+              voteList.map(vote => (
+                <FieldSet
+                  key={vote.address}
+                  legend={<React.Fragment><span>Title: </span><span style={{ color: 'rgb(0, 183, 250)' }}>{vote.title}</span></React.Fragment>}
+                  style={{
+                    marginBottom: '2em',
+                    borderLeft: '4px solid #00b7fa',
+                    background: '#282a30',
+                    boxShadow: '0 2px 12px #0002',
+                    borderRadius: '10px',
+                    padding: '1.5em',
+                  }}
+                >
+                  <div style={{ fontSize: '0.98em', marginBottom: '0.7em' }}>
+                    <div>
+                      Hashtag: <span style={{ color: '#00ff8f', fontWeight: 'bold' }}>{vote.hashtag}</span>
+                    </div>
+                    <div>Created On: {new Date(vote.created_at * 1000).toLocaleDateString()}</div>
+                    <div>Deadline: {new Date(vote.deadline * 1000).toLocaleDateString()}</div>
+                    <div>Number of Votes Cast: {vote.voteCount?.toLocaleString() ?? '0'}</div>
                   </div>
-                  <div>Created On: {new Date(vote.created_at * 1000).toLocaleDateString()}</div>
-                  <div>Deadline: {new Date(vote.deadline * 1000).toLocaleDateString()}</div>
-                  <div>Number of Votes Cast: {vote.voteCount?.toLocaleString() ?? '0'}</div>
-                </div>
-                {vote.account_addresses && (
-                  <div style={{ marginBottom: '0.5em' }}>
-                    {vote.account_addresses.map((opt, idx) => {
-                      const label = vote.option_labels?.[idx] || `Option ${idx + 1}`;
-                      const address = opt.address || opt;
-                      const weightedCount = Number(weightedVoteCounts?.[vote.slug]?.[address] ?? 0);
-                      const totalWeighted = vote.account_addresses
-                        .map(a => weightedVoteCounts?.[vote.slug]?.[a.address || a] ?? 0)
-                        .reduce((acc, count) => acc + Number(count), 0);
-                      const percent = totalWeighted > 0 ? (weightedCount / totalWeighted) * 100 : 0;
-                      return (
-                        <div key={address} style={{ marginBottom: '0.3em' }}>
-                          <strong>{label}</strong> - {(weightedCount / WEIGHT_SCALE_FACTOR).toLocaleString(undefined, { maximumFractionDigits: 2 })} weighted NXS
-                          <span style={{ marginLeft: '0.5em', color: '#888' }}>
-                            ({percent.toFixed(2)}%)
-                          </span>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-                <div style={{ display: 'flex', gap: '1em', marginTop: '1em' }}>
-                  <Button skin="filled-primary" style={{ flex: 1 }} onClick={() => handleViewOrEdit('view', vote)} disabled={userTrust < vote.min_trust}>
-                    Details/Vote
-                  </Button>
-                  {vote.creatorGenesis === genesis && (
-                    <Button skin="filled" style={{ flex: 1 }} onClick={() => handleViewOrEdit('edit', vote)}>
-                      Edit
-                    </Button>
+                  {vote.account_addresses && (
+                    <div style={{ marginBottom: '0.5em' }}>
+                      {vote.account_addresses.map((opt, idx) => {
+                        const label = vote.option_labels?.[idx] || `Option ${idx + 1}`;
+                        const address = opt.address || opt;
+                        const weightedCount = Number(weightedVoteCounts?.[vote.slug]?.[address] ?? 0);
+                        const totalWeighted = vote.account_addresses
+                          .map(a => weightedVoteCounts?.[vote.slug]?.[a.address || a] ?? 0)
+                          .reduce((acc, count) => acc + Number(count), 0);
+                        const percent = totalWeighted > 0 ? (weightedCount / totalWeighted) * 100 : 0;
+                        return (
+                          <div key={address} style={{ marginBottom: '0.3em' }}>
+                            <strong>{label}</strong> - {(weightedCount / WEIGHT_SCALE_FACTOR).toLocaleString(undefined, { maximumFractionDigits: 2 })} weighted NXS
+                            <span style={{ marginLeft: '0.5em', color: '#888' }}>
+                              ({percent.toFixed(2)}%)
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
                   )}
-                </div>
-              </FieldSet>
-            ))
-          )
-        )}
-        <div style={{ display: 'flex', justifyContent: 'center', gap: '1em', marginTop: '2em', flexWrap: 'wrap' }}>
-          <Button skin="filled-primary" onClick={() => setCurrentPage(p => Math.max(p - 1, 1))} disabled={currentPage === 1}>Previous</Button>
-          {[...Array(totalPages)].map((_, idx) => (
-            <Button
-              skin={currentPage === idx + 1 ? 'filled-primary' : 'filled'}
-              key={idx + 1}
-              onClick={() => setCurrentPage(idx + 1)}
-            >{idx + 1}</Button>
-          ))}
-          <Button skin="filled-primary" onClick={() => setCurrentPage(p => Math.min(p + 1, totalPages))} disabled={currentPage === totalPages}>Next</Button>
-        </div>
-      </FieldSet>
-
+                  <div style={{ display: 'flex', gap: '1em', marginTop: '1em' }}>
+                    <Button skin="filled-primary" style={{ flex: 1 }} onClick={() => handleViewOrEdit('view', vote)} disabled={userTrust < vote.min_trust}>
+                      Details/Vote
+                    </Button>
+                    {vote.creatorGenesis === genesis && (
+                      <Button skin="filled" style={{ flex: 1 }} onClick={() => handleViewOrEdit('edit', vote)}>
+                        Edit
+                      </Button>
+                    )}
+                  </div>
+                </FieldSet>
+              ))
+            )
+          )}
+          <div style={{ display: 'flex', justifyContent: 'center', gap: '1em', marginTop: '2em', flexWrap: 'wrap' }}>
+            <Button skin="filled-primary" onClick={() => handleSwitchPage(p => Math.max(p - 1, 1))} disabled={currentPage === 1}>Previous</Button>
+            {[...Array(totalPages)].map((_, idx) => (
+              <Button
+                skin={currentPage === idx + 1 ? 'filled-primary' : 'filled'}
+                key={idx + 1}
+                onClick={() => handleSwitchPage(idx + 1)}
+              >{idx + 1}</Button>
+            ))}
+            <Button skin="filled-primary" onClick={() => handleSwitchPage(p => Math.min(p + 1, totalPages))} disabled={currentPage === totalPages}>Next</Button>
+          </div>
+        </FieldSet>
+      </div>
+      
       {/* Footer */}
       <div style={{
         display: 'grid',
@@ -296,6 +319,19 @@ function VotingPageStyled({
           </ModalFooterBar>
         </Modal>
       )}
+
+      <style>
+        {`
+          @keyframes busySlide {
+            0% {
+              background-position: -200% 0;
+            }
+            100% {
+              background-position: 200% 0;
+            }
+          }
+        `}
+      </style>
     </Panel>
   );
 }
