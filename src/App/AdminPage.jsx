@@ -219,6 +219,26 @@ function AdminPageComponent() {
   
   function handleNewIssueClick() {
     dispatch({ type: 'RESET_ADMIN_FORM', payload: { deadline: calculateDefaultDeadline() } });
+    setTitle('');
+    setDescription('');
+    setOptionLabels(['', '']);
+    setOptionAddresses(['', '']);
+    setMinTrust(10000);
+    setVoteFinality('one_time');
+    setOrganizerName('');
+    setOrganizerEmail('');
+    setOrganizerTelegram('');
+    setHashtag('');
+    setDeadline(calculateDefaultDeadline());
+    setSummaryPro('');
+    setSummaryCon('');
+    setPossibleOutcomes('');
+    setSupportingDocs([]);
+    setCreatedBy('');
+    setCreatedAt('');
+    setCreatorGenesis('');
+    setJsonGuid('');
+    setSubmitButtonTitle('Submit');
 
     assetData = {};
     let el = null;
@@ -318,7 +338,6 @@ function AdminPageComponent() {
       setSupportingDocs([]);
       setCreatedBy('');
       setCreatedAt('');
-      setCreatorGenesis('');
       setJsonGuid('');
       setSubmitButtonTitle('Submit');
     }
@@ -554,7 +573,6 @@ function AdminPageComponent() {
           message: 'Failed to create vote asset',
           note: resultToUse.error
         });
-        setOptionAddresses(resultToUse.accounts);
         setIsUploading(false);
         setIsSubmitting(false);
         return;
