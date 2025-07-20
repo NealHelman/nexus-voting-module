@@ -3,6 +3,7 @@ import { Link, useNavigate, useSearchParams, useParams } from 'react-router-dom'
 import MarkdownWithZoom from "./MarkdownWithZoom";
 import { Copyright } from '../utils/copyright.js';
 import nxsPackage from '../../nxs_package.json';
+import nexusVotingService from '../services/nexusVotingService';
 import { StyledDropdownWrapper, StyledSelect, ModalFooterBar, ModalButton } from '../Styles/StyledComponents';
 
 const { version } = nxsPackage;
