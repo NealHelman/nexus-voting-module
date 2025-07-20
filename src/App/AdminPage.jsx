@@ -50,7 +50,7 @@ import {
     
 function AdminPageComponent() {
   const { currentIssue } = useSelector(state => state.issue);
-  const assetData = currentIssue?.data;
+  let assetData = currentIssue?.data;
   const { issueId } = useParams();
   
   // Admin state from Redux
@@ -61,6 +61,7 @@ function AdminPageComponent() {
     title,
     description,
     optionLabels = [],
+    optionAddresses = [],
     minTrust,
     voteFinality,
     organizerName,
@@ -122,6 +123,7 @@ function AdminPageComponent() {
   const setTitle = (value) => dispatch({ type: 'SET_TITLE', payload: value });
   const setDescription = (value) => dispatch({ type: 'SET_DESCRIPTION', payload: value });
   const setOptionLabels = (value) => dispatch({ type: 'SET_OPTION_LABELS', payload: value });
+  const setOptionAddresses = (value) => dispatch({ type: 'SET_OPTION_ADDRESSES', payload: value });
   const setMinTrust = (value) => dispatch({ type: 'SET_MIN_TRUST', payload: value });
   const setVoteFinality = (value) => dispatch({ type: 'SET_VOTE_FINALITY', payload: value });
   const setOrganizerName = (value) => dispatch({ type: 'SET_ORGANIZER_NAME', payload: value });
@@ -218,7 +220,7 @@ function AdminPageComponent() {
   function handleNewIssueClick() {
     dispatch({ type: 'RESET_ADMIN_FORM', payload: { deadline: calculateDefaultDeadline() } });
 
-    navigate('/admin');
+    assetData = {};
     let el = null;
     setTimeout(() => {
       el = document.getElementById('top');
@@ -280,6 +282,7 @@ function AdminPageComponent() {
       setTitle(assetData.title || '');
       setDescription(assetData.description || '');
       setOptionLabels(assetData.option_labels || []);
+      setOptionAddresses(assetData.option_addresses || []);
       setMinTrust(assetData.min_trust || '');
       setVoteFinality(assetData.vote_finality || 'one_time');
       setOrganizerName(assetData.organizer_name || '');
@@ -301,6 +304,7 @@ function AdminPageComponent() {
       setTitle('');
       setDescription('');
       setOptionLabels(['', '']);
+      setOptionAddresses(['', '']);
       setMinTrust(10000);
       setVoteFinality('one_time');
       setOrganizerName('');
@@ -318,7 +322,7 @@ function AdminPageComponent() {
       setJsonGuid('');
       setSubmitButtonTitle('Submit');
     }
-  }, [editingIdFromParams, assetData]);
+  }, [dispatch, editingIdFromParams, assetData]);
 
   React.useEffect(() => {
     if (!jsonGuid) return;
@@ -417,7 +421,7 @@ function AdminPageComponent() {
   
   const createVote = async () => {
     setIsSubmitting(true);
-    setMessage('Please wait while the voting issue data is submitted...<br />First, the NXS must be claimed by the Voting Authority...<br />Then, several objects need to be written to the blockchain.<br />PLEASE BE PATIENT.');
+    setMessage('');
 
     if (!title.trim() || !description.trim() || optionLabels.length < 2 || optionLabels.some(l => !l.trim())) {
       setMessage('Please fill in the title, description, and at least two valid option labels.');
@@ -428,6 +432,7 @@ function AdminPageComponent() {
     let assetName = '';
     let issueInfoGuid = '';
     let optionAccounts = [];
+    let optionAddresses = [];
     let slugs = [];
     let uploadedDocs = [];
     let resultToUse = null;
@@ -452,17 +457,18 @@ function AdminPageComponent() {
       assetName = assetData.slug;
       issueInfoGuid = assetData.issueInfo;
       optionAccounts = assetData.account_slugs;
+      optionAddresses = assetData.account_addresses;
       slugs = assetData.account_slugs;
     }
 
-    const config = {
+    let config = {
       description,
       summary_pro: summaryPro,
       summary_con: summaryCon,
       possible_outcomes: possibleOutcomes,
       option_labels: optionLabels,
       account_slugs: slugs,
-      account_addresses: assetData.account_addresses,
+      account_addresses: optionAddresses,
       min_trust: parseInt(minTrust),
       vote_finality: voteFinality,
       organizer_name: organizerName,
@@ -548,9 +554,15 @@ function AdminPageComponent() {
           message: 'Failed to create vote asset',
           note: resultToUse.error
         });
+        setOptionAddresses(resultToUse.accounts);
         setIsUploading(false);
         setIsSubmitting(false);
         return;
+      }
+
+      if (resultToUse.accounts && Array.isArray(resultToUse.accounts)) {
+        setOptionAddresses(resultToUse.accounts); // Keep full objects
+        config.account_addresses = resultToUse.accounts; // Update config with full objects
       }
     } else {
       // We're editing, so update
@@ -713,15 +725,32 @@ function AdminPageComponent() {
             width: '100vw',
             height: '100vh',
             display: 'flex',
+            flexDirection: 'column',
             justifyContent: 'center',
             alignItems: 'center',
             backgroundColor: 'rgba(255, 255, 255, 0.6)',
             zIndex: 9999
           }}>
             <div className="spinner" />
+            <div style={{ 
+              color: 'red', 
+              backgroundColor: 'yellow',
+              textAlign: 'center', 
+              fontWeight: 'bold',
+              zIndex: 10000,
+              padding: '1.5em',
+              marginTop: '25vh' // This positions it halfway between spinner and bottom
+            }}>
+              Please wait while the voting issue data is submitted.<br /><br />
+              First, the NXS must be claimed by the Voting Authority...<br />
+              Then, several objects need to be written to the blockchain.<br />
+              There is a 10-second delay between writing each<br />
+              objects to avoid incurring extra fees.<br />
+              Do not click on any other wallet buttons while this is processing.<br /><br />
+              PLEASE BE PATIENT.
+            </div>
           </div>
-        )}
-        
+        )}        
         <FieldSet legend="BASIC INFO" style={{ marginBottom: '2em' }}>
           <div style={{ marginBottom: '1.5em' }}>
             <label htmlFor="titleTextField" style={{ marginBottom: '0.25rem', display: 'block' }}>Title</label>

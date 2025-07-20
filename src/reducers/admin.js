@@ -7,6 +7,7 @@ const initialState = {
   title: '',
   description: '',
   optionLabels: ['', ''],
+  optionAddresses: ['', ''],
   minTrust: 10000,
   voteFinality: 'one_time',
   organizerName: '',
@@ -73,6 +74,8 @@ export default function admin(state = initialState, action) {
       return { ...state, description: action.payload };
     case 'SET_OPTION_LABELS':
       return { ...state, optionLabels: action.payload };
+    case 'SET_OPTION_ADDRESSES':
+      return { ...state, optionAddresses: action.payload };
     case 'SET_MIN_TRUST':
       return { ...state, minTrust: action.payload };
     case 'SET_VOTE_FINALITY':

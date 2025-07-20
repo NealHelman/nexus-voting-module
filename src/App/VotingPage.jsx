@@ -165,6 +165,11 @@ function VotingPageComponent() {
   const setNamedAssetCost = (page) => dispatch({ type: 'SET_NAMED_ASSET_COST', payload: page });
   const setNamedAccountCost = (page) => dispatch({ type: 'SET_NAMED_ACCOUNT_COST', payload: page });
   
+    // ***** DEBUGGING MASSIVE BUG *****
+  const entireState = useSelector(state => state);
+  console.log('Full Redux State:', entireState);
+
+  
   function calculateDefaultDeadline() {
     const now = new Date();
     const deadline = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
@@ -395,7 +400,7 @@ function VotingPageComponent() {
       } catch (e) {
         showErrorDialog({ message: 'Failed to load votes', note: e.message });
       }
-
+      
       setStatus("idle");
       setLoading(false);
     }
