@@ -157,9 +157,9 @@ function AdminPageComponent() {
 
   const [searchParams] = useSearchParams();
   const location = useLocation();
-  const editingIdFromParams = searchParams.get('edit') || '';
-  const inEditMode = !!editingIdFromParams;
-  const panelTitle = inEditMode
+  let editingIdFromParams = searchParams.get('edit') || '';
+  let inEditMode = !!editingIdFromParams;
+  const panelTitle = (editingIdFromParams || isEditing)
     ? 'Nexus Community On-Chain Voting – Edit Voting Issue'
     : 'Nexus Community On-Chain Voting – Enter New Voting Issue';
 
@@ -218,6 +218,10 @@ function AdminPageComponent() {
   };
   
   function handleNewIssueClick() {
+    // Clear the URL search params first
+    navigate('/admin', { replace: true });
+    
+    // Then clear all the Redux state
     dispatch({ type: 'RESET_ADMIN_FORM', payload: { deadline: calculateDefaultDeadline() } });
     setTitle('');
     setDescription('');
@@ -236,17 +240,14 @@ function AdminPageComponent() {
     setSupportingDocs([]);
     setCreatedBy('');
     setCreatedAt('');
-    setCreatorGenesis('');
     setJsonGuid('');
     setSubmitButtonTitle('Submit');
-
-    assetData = {};
-    let el = null;
+    
     setTimeout(() => {
-      el = document.getElementById('top');
+      const el = document.getElementById('top');
       if (el) el.scrollIntoView({ behavior: 'smooth' });
-    }, 100); // slight delay to ensure render
-  };
+    }, 100);
+  }
 
   const handleReturnToVotingPageClick = (e) => {
     e.preventDefault(); // Prevent default link behavior if needed
@@ -340,6 +341,9 @@ function AdminPageComponent() {
       setCreatedAt('');
       setJsonGuid('');
       setSubmitButtonTitle('Submit');
+      editingIdFromParams=false;
+      inEditMode=false;
+      setIsEditing(false);
     }
   }, [dispatch, editingIdFromParams, assetData]);
 
