@@ -62,7 +62,7 @@ function IssuePage() {
   const { issueId } = useParams();
 
   const {
-    components: { Panel, Button, Dropdown, FieldSet, Modal, TextField, Tooltip, MultilineTextField },
+    components: { Panel, Button, Dropdown, FieldSet, Modal, TextField, Tooltip, MultilineTextField, Switch },
     utilities: { apiCall, copyToClipboard, secureApiCall, confirm, proxyRequest, showErrorDialog, showSuccessDialog, showInfoDialog },
   } = NEXUS;
 
@@ -73,7 +73,7 @@ function IssuePage() {
   title,
   description,
   optionLabels = ['', ''],
-  optionAddresses = [],
+  optionAddresses = ['', ''],
   minTrust,
   voteFinality,
   organizerName,
@@ -622,68 +622,111 @@ function IssuePage() {
           <div style={{ textAlign: 'center', marginBottom: '1em' }}>
             Click on the document title to toggle display of the document<br />(Viewer for text or markdown files, download all others.)
           </div>
-          <ul style={{ width: '100%', padding: 0, margin: 0, listStyle: 'none' }}>
-            {issue.supporting_docs.map(doc => {
-              const docData = docsContent[doc.guid];
-              if (!docData) return <li key={doc.guid}>Loading document...</li>;
-              if (docData.error) return <li key={doc.guid} style={{ color: 'red' }}>{docData.error}</li>;
-              const isOpen = !!openDocs[doc.guid];
-              return (
-                <li key={doc.guid} style={{ width: '100%', boxSizing: 'border-box', marginBottom: '2em' }}>
-                  <div
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      gap: '1em',
-                      width: '100%',
-                    }}
-                  >
-                    {console.log('IssuePage::docData: ', docData)}
-                    {(docData.type == 'markdown' || docData.type === 'text') && (
-                      <strong
-                        style={{ cursor: 'pointer', color: '#00b7fa' }}
-                        onClick={() => toggleDoc(doc.guid)}
+          
+          <div style={{ marginTop: '1.5em' }}>
+            <ul className="uploaded-files-list" style={{ listStyle: 'none', padding: 0 }}>
+              {issue.supporting_docs.map(doc => {
+                const docData = docsContent[doc.guid];
+                if (!docData) return <li key={doc.guid}>Loading document...</li>;
+                if (docData.error) return <li key={doc.guid} style={{ color: 'red' }}>{docData.error}</li>;
+                const isOpen = !!openDocs[doc.guid];
+                const isChecked = analysisGuid === doc.guid;
+                
+                return (
+                  <li className="uploaded-file-row" key={doc.guid} style={{ 
+                    display: 'grid',
+                    gridTemplateColumns: '1fr auto 1fr',
+                    alignItems: 'center',
+                    gap: '1em',
+                    padding: '1em',
+                    marginBottom: '0.5em',
+                    border: '1px solid #ddd',
+                    borderRadius: '4px',
+                    backgroundColor: '#f9f9f9'
+                  }}>
+                    {/* Left column - Filename */}
+                    <span className="file-name" style={{ 
+                      fontWeight: 'bold', 
+                      color: '#1c1d1f',
+                      justifySelf: 'start',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap'
+                    }}>
+                      {console.log('IssuePage::docData: ', docData)}
+                      {(docData.type == 'markdown' || docData.type === 'text') && (
+                        <strong
+                          style={{ cursor: 'pointer', color: '#00b7fa' }}
+                          onClick={() => toggleDoc(doc.guid)}
+                        >
+                          {docData.name}
+                        </strong>
+                      )}
+                      {(docData.type !== 'markdown' && docData.type !== 'text') && (
+                        <strong>
+                          {docData.name}
+                        </strong>
+                      )}
+                    </span>
+                    
+                    {/* Center column - Download Button */}
+                    <span className="file-actions" style={{ justifySelf: 'center' }}>
+                      <Button
+                        skin="filled-primary"
+                        onClick={() => handleDownload(docData.name, docData.base64)}
                       >
-                        {docData.name}
-                      </strong>
+                        Download
+                      </Button>
+                    </span>
+                    
+                    {/* Right column - Analysis Switch */}
+                    <span className="file-analysis-switch" style={{ justifySelf: 'end' }}>
+                      <Switch
+                        name="analysis_file"
+                        checked={isChecked}
+                        readOnly={true}
+                      />
+                    </span>
+                    
+                    {/* Content viewer in separate div below the grid */}
+                    {isOpen && (
+                      <div style={{
+                        gridColumn: '1 / -1', // Span all columns
+                        marginTop: '1em',
+                        padding: '1em',
+                        backgroundColor: '#2d2d2d',
+                        color: '#ffffff',
+                        borderRadius: '4px',
+                        border: '1px solid #555',
+                        fontFamily: 'monospace',
+                        fontSize: '14px',
+                        lineHeight: '1.4',
+                        whiteSpace: 'pre-wrap',
+                        overflow: 'auto',
+                        maxHeight: '800px'
+                      }}>
+                        {docData.type === 'markdown' && (
+                          <div className="document-display" style={{ fontFamily: 'Times New Roman, Times, serif', color: '#ffffff' }}>
+                            <MarkdownWithZoom>
+                              {docData.content}
+                            </MarkdownWithZoom>
+                          </div>
+                        )}
+                        {docData.type === 'text' && (
+                          <div className='document-display'>
+                            <pre style={{ margin: 0, fontFamily: 'inherit', color: 'inherit' }}>{docData.content}</pre>
+                          </div>
+                        )}
+                        {docData.type === 'unknown' && (
+                          <pre style={{ margin: 0, fontFamily: 'inherit', color: 'inherit' }}>{docData.content}</pre>
+                        )}
+                      </div>
                     )}
-                    {(docData.type !== 'markdown' && docData.type !== 'text') && (
-                      <strong>
-                        {docData.name}
-                      </strong>
-                    )}
-                    <Button
-                      skin="filled-primary"
-                      onClick={() => handleDownload(docData.name, docData.base64)}
-                      style={{ marginLeft: 'auto', whiteSpace: 'nowrap' }}
-                    >
-                      Download
-                    </Button>
-                  </div>
-                  {isOpen && (
-                    <>
-                      {docData.type === 'markdown' && (
-                        <div className="document-display" style={{ fontFamily: 'Times New Roman, Times, serif' }}>
-                          <MarkdownWithZoom>
-                            {docData.content}
-                          </MarkdownWithZoom>
-                        </div>
-                      )}
-                      {docData.type === 'text' && (
-                        <div className='document-display'>
-                          <pre>{docData.content}</pre>
-                        </div>
-                      )}
-                      {docData.type === 'unknown' && (
-                        <pre>{docData.content}</pre>
-                      )}
-                    </>
-                  )}
-                </li>
-              );
-            })}
-          </ul>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
         </FieldSet>
       )}
 
