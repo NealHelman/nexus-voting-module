@@ -248,20 +248,18 @@ function VotingPageComponent() {
       // 2c. Get wallet genesis if missing
       let walletGenesis = genesis;
       let walletSenderAddress = senderAddress;
-      if (!walletGenesis) {
-        try {
-          const data = await apiCall("finance/get/account/owner,address", { name: 'default' });
-          walletGenesis = data?.owner || '';
-          walletSenderAddress = data?.address || '';
-          setGenesis(walletGenesis);
-          setSenderAddress(walletSenderAddress);
-        } catch (e) {
-          showErrorDialog({
-            message: 'Failed to retrieve genesis',
-            note: e.message
-          });
-          return;
-        }
+      try {
+        const data = await apiCall("finance/get/account/owner,address", { name: 'default' });
+        walletGenesis = data?.owner || '';
+        walletSenderAddress = data?.address || '';
+        setGenesis(walletGenesis);
+        setSenderAddress(walletSenderAddress);
+      } catch (e) {
+        showErrorDialog({
+          message: 'Failed to retrieve genesis',
+          note: e.message
+        });
+        return;
       }
       if (cancelled) return;
       
@@ -270,19 +268,23 @@ function VotingPageComponent() {
       // 5. Get user trust and weight
       try {
         // Trust and Stake
-        const response = await apiCall('finance/list/trust/trust,stake', { name: 'trust' });
+        const response = await apiCall('finance/list/trust/trust,stake,address', { name: 'trust' });
         const trust = response[0].trust || 0;
         const stake = response[0].stake || 0;
+        const trustAddress = response[0].address || '';
         // Total Network Stake
         const metricsResponse = await apiCall('system/get/metrics', {});
         const totalStake = metricsResponse.trust.stake || 1;
         // Genesis Timestamp (Participation Start)
         const genesisTxResponse = await apiCall(
-          'ledger/list/transactions/timestamp',
-          { verbose: 'summary', where: 'results.contracts.OP=GENESIS' }
+          'register/transactions/any/timestamp/min',
+          { verbose: 'summary', 
+            limit: 10000000,
+            address: trustAddress,
+            where: 'results.contract.OP=GENESIS OR results.contracts.OP=TRUST' }
         );
         const now = Date.now() / 1000;
-        const genesisTime = genesisTxResponse[0].timestamp || now;
+        const genesisTime = genesisTxResponse.min || now;
         const participationTime = Math.max(1, Math.floor((now - genesisTime) / (60 * 60 * 24))); // days
         // Compute Voting Weight
         const x = stake / totalStake;
@@ -319,6 +321,8 @@ function VotingPageComponent() {
 
       // 7. Get voting history (votes cast)
       if (walletGenesis && walletSenderAddress && votingAuthorityGenesis) {
+        console.log('walletSenderAddress: ', walletSenderAddress);
+        console.log('walletGenesis: ', walletGenesis);
         try {
           const response = await proxyRequest(
             `${BACKEND_BASE}/votes-cast/${walletGenesis}?senderAddress=${walletSenderAddress}&votingAuthorityGenesis=${votingAuthorityGenesis}`,
