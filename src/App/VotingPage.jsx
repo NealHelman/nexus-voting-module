@@ -1,6 +1,7 @@
 // --- VotingPage.jsx ---
 import { useDispatch, useSelector } from 'react-redux';
 import { useNavigate } from 'react-router-dom';
+import { persistor } from '../store';
 import { Link } from 'react-router-dom';
 import { decompressFromBase64  } from 'lz-string';
 import nexusVotingService from '../services/nexusVotingService';
@@ -66,6 +67,8 @@ const {
 function VotingPageComponent() {
   const dispatch = useDispatch();
   const navigate = useNavigate();
+  const accessed = useSelector(state => state.nexus.userStatus?.accessed);
+  const genesis = useSelector(state => state.nexus.userStatus?.genesis);
   
   // Voting state from Redux
   const {
@@ -79,7 +82,6 @@ function VotingPageComponent() {
     weightedVoteCounts,
     voteListMeta,
     totalPages,
-    genesis,
     canAccessAdmin,
     subscribed,
     userTrust,
@@ -149,7 +151,6 @@ function VotingPageComponent() {
   const setTotalPages = (page) => dispatch({ type: 'SET_TOTAL_PAGES', payload: page });
 
   // User & admin state
-  const setGenesis = (page) => dispatch({ type: 'SET_GENESIS', payload: page });
   const setCanAccessAdmin = (page) => dispatch({ type: 'SET_CAN_ACCESS_ADMIN', payload: page });
   const setSubscribed = (page) => dispatch({ type: 'SET_SUBSCRIBED', payload: page });
   const setUserTrust = (page) => dispatch({ type: 'SET_USER_TRUST', payload: page });
@@ -181,6 +182,16 @@ function VotingPageComponent() {
   const isCacheFresh = React.useMemo(() => {
     return fetchedAt && (Date.now() - fetchedAt < CACHE_TIMEOUT);
   }, [fetchedAt]);
+  
+  // Determine if this is the first module load since wallet started/user logged in
+  React.useEffect(() => {
+      if (!accessed) return;
+      if (fetchedAt / 1000 < accessed) {
+        localStorage.removeItem('persist:admin');
+        localStorage.removeItem('persist:issue');
+        handleRefresh();
+      }
+  }, [dispatch, fetchedAt]);
 
   // ----------- LOAD IMPORTANT INFORMATION FIRST THING (only if needed) -----------
   React.useEffect(() => {
@@ -249,10 +260,8 @@ function VotingPageComponent() {
       let walletGenesis = genesis;
       let walletSenderAddress = senderAddress;
       try {
-        const data = await apiCall("finance/get/account/owner,address", { name: 'default' });
-        walletGenesis = data?.owner || '';
+        const data = await apiCall("finance/get/account/address", { name: 'default' });
         walletSenderAddress = data?.address || '';
-        setGenesis(walletGenesis);
         setSenderAddress(walletSenderAddress);
       } catch (e) {
         showErrorDialog({
@@ -548,7 +557,10 @@ function VotingPageComponent() {
   };
   
   const handleSwitchPage = (e) => {
+    console.log('setting page to ', e);
     setCurrentPage(e);
+    dispatch({ type: 'SET_FETCHED_AT', payload: null });
+    dispatch({ type: 'SET_VOTE_LIST_FETCHED', payload: false });
 
     let el = null;
     setTimeout(() => {
@@ -646,7 +658,6 @@ function VotingPageComponent() {
       votesPerPage={votesPerPage}
       subscribed={subscribed}
       canAccessAdmin={canAccessAdmin}
-      genesis={genesis}
       handleViewOrEdit={handleViewOrEdit}
       handleRefresh={handleRefresh}
       setCurrentPage={setCurrentPage}

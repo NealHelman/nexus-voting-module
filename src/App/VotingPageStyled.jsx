@@ -1,4 +1,5 @@
 import { useNavigate } from 'react-router-dom';
+import { useSelector } from 'react-redux';
 import { Copyright } from '../utils/copyright.js';
 import { StyledDropdownWrapper, StyledSelect, ModalFooterBar, ModalButton, StyledTextField, StyledTextArea } from '../Styles/StyledComponents';
 
@@ -24,7 +25,6 @@ function VotingPageStyled({
   votesPerPage,
   subscribed,
   canAccessAdmin,
-  genesis,
   handleViewOrEdit,
   handleRefresh,
   setCurrentPage,
@@ -63,6 +63,7 @@ function VotingPageStyled({
   handleSwitchPage
 }) {
   const navigate = useNavigate();
+  const genesis = useSelector(state => state.nexus.userStatus?.genesis);
 
   const showBusyIndicator = status === "loading" && voteList.length > 0;
   
@@ -237,7 +238,7 @@ function VotingPageStyled({
                     <Button skin="filled-primary" style={{ flex: 1 }} onClick={() => handleViewOrEdit('view', vote)} disabled={userTrust < vote.min_trust}>
                       Details/Vote
                     </Button>
-                    {vote.creatorGenesis === genesis && (
+                    {vote.creatorGenesis == genesis && (
                       <Button skin="filled" style={{ flex: 1 }} onClick={() => handleViewOrEdit('edit', vote)}>
                         Edit
                       </Button>

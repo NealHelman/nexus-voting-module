@@ -145,7 +145,7 @@ function AdminPageComponent() {
   const setAnalysisGuid = (value) => dispatch({ type: 'SET_ANALYSIS_GUID', payload: value });
   const setSenderAddress = (value) => dispatch({ type: 'SET_SENDER_ADDRESS', payload: value });
   const setSubmissionCost = (value) => dispatch({ type: 'SET_SUBMISSION_COST', payload: value });
-    const setVotingAuthoritySigchain = (value) => dispatch({ type: 'SET_VOTING_AUTHORITY_SIGCHAIN', payload: value });
+  const setVotingAuthoritySigchain = (value) => dispatch({ type: 'SET_VOTING_AUTHORITY_SIGCHAIN', payload: value });
   const setVotingAuthorityAccount = (value) => dispatch({ type: 'SET_VOTING_AUTHORITY_ACCOUNT', payload: value });
   const setVotingAuthorityGenesis = (value) => dispatch({ type: 'SET_VOTING_AUTHORITY_GENESIS', payload: value });
   const setDonationRecipient = (page) => dispatch({ type: 'SET_DONATION_RECIPIENT', payload: page });

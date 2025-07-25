@@ -20,7 +20,6 @@ const initialState = {
   },
   totalPages: 1,
   // User & admin state
-  genesis: '',
   canAccessAdmin: 0,
   subscribed: 1,
   userTrust: 0,
@@ -65,8 +64,6 @@ export default function voting(state = initialState, action) {
       return { ...state, voteListMeta: action.payload };
     case 'SET_TOTAL_PAGES':
       return { ...state, totalPages: action.payload };
-    case 'SET_GENESIS':
-      return { ...state, genesis: action.payload };
     case 'SET_CAN_ACCESS_ADMIN':
       return { ...state, canAccessAdmin: action.payload };
     case 'SET_SUBSCRIBED':

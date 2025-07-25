@@ -87,7 +87,6 @@ function IssuePage() {
   supportingDocs = [],
   createdBy,
   createdAt,
-  userGenesis,
   creatorGenesis,
   jsonGuid,
   analysisGuid,
@@ -104,13 +103,15 @@ function IssuePage() {
 
   // Get values from the voting slice
   const {
-    genesis,
     userWeight,
     senderAddress: votingSenderAddress,
     donationRecipient: votingDonationRecipient,
     votingAuthoritySigchain,
     weightedVoteCounts
   } = useSelector(state => state.voting);
+  
+  const userGenesis = useSelector(state => state.userStatus?.genesis);
+
 
   // Use the most appropriate values
   const senderAddress = votingSenderAddress || issueSenderAddress;
@@ -147,7 +148,6 @@ function IssuePage() {
   const setCreatedBy = (value) => dispatch({ type: 'SET_CREATED_BY', payload: value });
   const setCreatedAt = (value) => dispatch({ type: 'SET_CREATED_AT', payload: value });
   const setCreatorGenesis = (value) => dispatch({ type: 'SET_CREATOR_GENESIS', payload: value });
-  const setUserGenesis = (value) => dispatch({ type: 'SET_USER_GENESIS', payload: value });
   const setJsonGuid = (value) => dispatch({ type: 'SET_JSON_GUID', payload: value });
   const setAnalysisGuid = (value) => dispatch({ type: 'SET_ANALYSIS_GUID', payload: value });
   const setSenderAddress = (value) => dispatch({ type: 'SET_SENDER_ADDRESS', payload: value });
@@ -241,21 +241,6 @@ function IssuePage() {
     });
   }, []);
 
-  React.useEffect(() => {
-    const getGenesis = async () => {
-      try {
-        const data = await apiCall("finance/get/account/owner", { name: 'default' });
-        setUserGenesis(data?.owner || '');
-      } catch (e) {
-        showErrorDialog({
-          message: 'Failed to retrieve genesis',
-          note: e.message
-        });
-      }
-    };
-    getGenesis();
-  }, [dispatch]);
-  
   React.useEffect(() => {
     if (!userGenesis) return;
       const fetchSenderAddress = async () => {

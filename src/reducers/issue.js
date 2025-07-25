@@ -22,7 +22,6 @@ const initialState = {
   supportingDocs: [],
   createdBy: '',
   createdAt: '',
-  userGenesis: '',
   creatorGenesis: '',
   jsonGuid: '',
   analysisGuid: '',
@@ -113,8 +112,6 @@ export default function issue(state = initialState, action) {
       return { ...state, createdAt: action.payload };
     case 'SET_CREATOR_GENESIS':
       return { ...state, creatorGenesis: action.payload };
-    case 'SET_USER_GENESIS':
-      return { ...state, userGenesis: action.payload };
     case 'SET_JSON_GUID':
       return { ...state, jsonGuid: action.payload };
     case 'SET_ANALYSIS_GUID':
