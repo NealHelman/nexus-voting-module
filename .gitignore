@@ -4,3 +4,13 @@ storage.json
 repo_info.json
 /build
 *.zip
+.vs/slnx.sqlite
+.vs/ProjectSettings.json
+.vs/nexus-voting-module/FileContentIndex/98d25c29-0591-4bf6-bea1-dd1e670dff63.vsidx
+.vs/nexus-voting-module/FileContentIndex/23af62f8-322e-440b-b4d7-8efee647fa43.vsidx
+.vs/nexus-voting-module/CopilotIndices/17.14.734.62261/SemanticSymbols.db-wal
+.vs/nexus-voting-module/CopilotIndices/17.14.734.62261/SemanticSymbols.db-shm
+.vs/nexus-voting-module/CopilotIndices/17.14.734.62261/SemanticSymbols.db
+.vs/nexus-voting-module/CopilotIndices/17.14.734.62261/CodeChunks.db-wal
+.vs/nexus-voting-module/CopilotIndices/17.14.734.62261/CodeChunks.db-shm
+.vs/nexus-voting-module/CopilotIndices/17.14.734.62261/CodeChunks.db

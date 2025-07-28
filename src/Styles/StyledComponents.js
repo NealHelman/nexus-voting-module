@@ -265,6 +265,4 @@ export const StyledTextArea = styled.textarea`
   }
 `;
 
-// Keep your existing StyledSelect and StyledDropdownWrapper as they are!
-
 export const Strong = styled.strong``;
