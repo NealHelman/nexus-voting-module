@@ -1,21 +1,16 @@
-/**
- * Important note - This file is imported into module_preload.js, either directly or
- * indirectly, and will be a part of the preload script for modules, therefore:
- * - Be picky with importing stuffs into this file, especially for big
- * files and libraries. The bigger the preload scripts get, the slower the modules
- * will load.
- * - Don't assign anything to `global` variable because it will be passed
- * into modules' execution environment.
- * - Make sure this note also presents in other files which are imported here.
- */
+const {
+  libraries: {
+    React,
+    ReactDOM,
+    emotion: { react, styled },
+  },
+  components: {
+    Icon
+  }
+} = NEXUS;
 
-// External Dependencies
-import { keyframes } from '@emotion/react';
-import styled from '@emotion/styled';
-import { ComponentProps, ReactNode } from 'react';
-
-// Internal Global Dependencies
-import Icon, { SvgIcon } from 'components/Icon';
+const { keyframes } = NEXUS.libraries.emotion.react;
+const { ComponentProps, ReactNode } = React;
 
 const intro = keyframes`
   from { 
@@ -33,7 +28,7 @@ const borderRadius = 4;
 const PanelWrapper = styled.div({
   width: '100%',
   height: '100%',
-  padding: '30px 10%',
+  padding: '30px 10% 0 10%', // Remove bottom padding!
   display: 'flex',
   alignItems: 'stretch',
 });
@@ -72,18 +67,14 @@ const PanelBody = styled.div(({ theme }) => ({
   background: theme.lower(theme.background, 0.3),
   borderBottomLeftRadius: borderRadius,
   borderBottomRightRadius: borderRadius,
-  padding: '20px 30px',
+  padding: '20px 30px 0 30px', // Remove bottom padding!
+  paddingBottom: 0, // Explicitly set to 0
   position: 'relative',
   overflow: 'auto',
   overscrollBehavior: 'none',
+  display: 'flex', // Add flex for better footer control
+  flexDirection: 'column', // Stack content vertically
 }));
-
-export interface PanelProps
-  extends Omit<ComponentProps<typeof PanelWrapper>, 'title'> {
-  icon?: SvgIcon;
-  title?: ReactNode;
-  controls?: ReactNode;
-}
 
 const Panel = ({
   icon,
@@ -91,8 +82,9 @@ const Panel = ({
   controls,
   ref,
   children,
+  allowStickyFooter = false,
   ...rest
-}: PanelProps) => (
+}) => (
   <PanelWrapper {...rest}>
     <PanelComponent ref={ref}>
       <PanelHeader>
@@ -103,7 +95,9 @@ const Panel = ({
         {controls}
       </PanelHeader>
 
-      <PanelBody>{children}</PanelBody>
+      <PanelBody style={allowStickyFooter ? { paddingBottom: 0 } : undefined}>
+        {children}
+      </PanelBody>
     </PanelComponent>
   </PanelWrapper>
 );
