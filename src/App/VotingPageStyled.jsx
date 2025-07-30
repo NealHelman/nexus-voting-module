@@ -279,86 +279,87 @@ function VotingPageStyled({
                         </div>
                     </FieldSet>
                 </div>
+            </div>
 
-                {/* Clean sticky footer */}
-                <div
-                    style={{
-                        position: 'sticky',
-                        bottom: 0,
-                        display: 'grid',
-                        gridTemplateColumns: '1fr auto 1fr',
-                        alignItems: 'center',
-                        fontSize: 'small',
-                        background: 'inherit',
-                        padding: '8px 30px 30px 30px', // Include the bottom padding here
-                        margin: '0',
-                        boxShadow: '0 -1px 3px rgba(0,0,0,0.1)',
-                        zIndex: 1
-                    }}
-                >
-                    <div style={{ justifySelf: 'start' }}>version {version}</div>
-                    <div style={{ justifySelf: 'center' }}>
-                        <Button skin="filled-primary" onClick={() => setIsDonating(true)}>Donate</Button>
-                    </div>
-                    <Copyright />
+            {/* Clean sticky footer */}
+            <div
+                style={{
+                    position: 'sticky',
+                    bottom: 0,
+                    display: 'grid',
+                    gridTemplateColumns: '1fr auto 1fr',
+                    alignItems: 'center',
+                    fontSize: 'small',
+                    background: '#212328',
+                    padding: '8px 30px 30px 30px', // Include the bottom padding here
+                    margin: '0',
+                    boxShadow: '0 -1px 3px rgba(0,0,0,0.1)',
+                    zIndex: 1
+                }}
+            >
+                <div style={{ justifySelf: 'start' }}>version {version}</div>
+                <div style={{ justifySelf: 'center' }}>
+                    <Button skin="filled-primary" onClick={() => setIsDonating(true)}>Donate</Button>
                 </div>
+                <Copyright />
+            </div>
 
-                {/* Modals */}
-                {searchVisible && (
-                    <Modal id="searchEntryDialog" escToClose={true} removeModal={closeSearchModal} style={{ width: '500px' }}>
-                        <Modal.Header>Choose a key to search on,<br />and enter a word to search<br />(case-sensitive)</Modal.Header>
-                        <Modal.Body>
-                            <StyledDropdownWrapper label="Search Key">
-                                <StyledSelect value={searchKey} onChange={e => setSearchKey(e.target.value)}>
-                                    <option value="title">Title</option>
-                                    <option value="hashtag">Hashtag</option>
-                                </StyledSelect>
-                            </StyledDropdownWrapper>
-                            <StyledTextField label="SearchTerm" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
-                        </Modal.Body>
-                        <ModalFooterBar>
-                            <Button skin="filled-primary" onClick={handleStartSearch} disabled={!searchTerm || !searchKey}>Search</Button>
-                            <Button skin="filled" onClick={closeSearchModal}>Cancel</Button>
-                        </ModalFooterBar>
-                    </Modal>
-                )}
-                {emailVisible && (
-                    <Modal id="emailEntryDialog" escToClose={true} removeModal={() => setEmailVisible(false)} style={{ width: '500px' }}>
-                        <Modal.Header>Enter your email</Modal.Header>
-                        <Modal.Body>
-                            <StyledTextField label="Email" value={userEmail} onChange={(e) => setUserEmail(e.target.value)} />
-                        </Modal.Body>
-                        <ModalFooterBar>
-                            <Button skin="filled-primary" onClick={handleSubscriptionToggle} disabled={!userEmailValid}>Submit</Button>
-                            <Button skin="filled" onClick={resetEmailModal}>Cancel</Button>
-                        </ModalFooterBar>
-                    </Modal>
-                )}
-                {isDonating && (
-                    <Modal id="DonationDialog" escToClose={true} removeModal={() => setIsDonating(false)} style={{ width: '500px' }}>
-                        <Modal.Header>Thank you!<br />How many NXS<br />do you wish to donate?</Modal.Header>
-                        <Modal.Body>
-                            <StyledTextField label="DonationAmount" value={donationAmount} onChange={(e) => setDonationAmount(e.target.value)} />
-                        </Modal.Body>
-                        <ModalFooterBar>
-                            <Button skin="filled-primary" onClick={handleDonation} disabled={!donationAmount || !senderAddress || donationSent}>Donate</Button>
-                            <Button skin="filled" onClick={resetDonationModal}>Cancel</Button>
-                        </ModalFooterBar>
-                    </Modal>
-                )}
+            {/* Modals */}
+            {searchVisible && (
+                <Modal id="searchEntryDialog" escToClose={true} removeModal={closeSearchModal} style={{ width: '500px' }}>
+                    <Modal.Header>Choose a key to search on,<br />and enter a word to search<br />(case-sensitive)</Modal.Header>
+                    <Modal.Body>
+                        <StyledDropdownWrapper label="Search Key">
+                            <StyledSelect value={searchKey} onChange={e => setSearchKey(e.target.value)}>
+                                <option value="title">Title</option>
+                                <option value="hashtag">Hashtag</option>
+                            </StyledSelect>
+                        </StyledDropdownWrapper>
+                        <StyledTextField label="SearchTerm" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
+                    </Modal.Body>
+                    <ModalFooterBar>
+                        <Button skin="filled-primary" onClick={handleStartSearch} disabled={!searchTerm || !searchKey}>Search</Button>
+                        <Button skin="filled" onClick={closeSearchModal}>Cancel</Button>
+                    </ModalFooterBar>
+                </Modal>
+            )}
+            {emailVisible && (
+                <Modal id="emailEntryDialog" escToClose={true} removeModal={() => setEmailVisible(false)} style={{ width: '500px' }}>
+                    <Modal.Header>Enter your email</Modal.Header>
+                    <Modal.Body>
+                        <StyledTextField label="Email" value={userEmail} onChange={(e) => setUserEmail(e.target.value)} />
+                    </Modal.Body>
+                    <ModalFooterBar>
+                        <Button skin="filled-primary" onClick={handleSubscriptionToggle} disabled={!userEmailValid}>Submit</Button>
+                        <Button skin="filled" onClick={resetEmailModal}>Cancel</Button>
+                    </ModalFooterBar>
+                </Modal>
+            )}
+            {isDonating && (
+                <Modal id="DonationDialog" escToClose={true} removeModal={() => setIsDonating(false)} style={{ width: '500px' }}>
+                    <Modal.Header>Thank you!<br />How many NXS<br />do you wish to donate?</Modal.Header>
+                    <Modal.Body>
+                        <StyledTextField label="DonationAmount" value={donationAmount} onChange={(e) => setDonationAmount(e.target.value)} />
+                    </Modal.Body>
+                    <ModalFooterBar>
+                        <Button skin="filled-primary" onClick={handleDonation} disabled={!donationAmount || !senderAddress || donationSent}>Donate</Button>
+                        <Button skin="filled" onClick={resetDonationModal}>Cancel</Button>
+                    </ModalFooterBar>
+                </Modal>
+            )}
 
-                <style>
-                    {`
-          @keyframes busySlide {
-            0% {
-              background-position: -200% 0;
-            }
-            100% {
-              background-position: 200% 0;
-            }
-          }
-        `}
-                </style>
+            <style>
+                {`
+                      @keyframes busySlide {
+                        0% {
+                          background-position: -200% 0;
+                        }
+                        100% {
+                          background-position: 200% 0;
+                        }
+                      }
+                    `}
+            </style>
         </Panel>
     );
 }
