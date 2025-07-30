@@ -18,7 +18,7 @@ export function Copyright() {
     <div style={{ justifySelf: 'end' }}>
       <span>copyright = © {yearString},</span>
       <Tooltip.Trigger
-        tooltip={
+              tooltip={
         <div style={{ textAlign: 'center' }}>
           <img src="Neal.png" width={96} alt="Neal Helman" style={{ borderRadius: '8px' }} />
           <div style={{ marginTop: 8, fontSize: 14, color: '#fff' }}>
